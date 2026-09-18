@@ -100,6 +100,21 @@ export function Gallery({
   const task = useTask(),
     fileInput = useRef<HTMLInputElement>(null);
   const admin = user.role === 'admin';
+  const [pendingDeletions, setPendingDeletions] = useState(0);
+  useEffect(() => {
+    if (!admin) return;
+    const controller = new AbortController();
+    const check = () =>
+      api<{ pending: number }>('/deletions', 'GET', undefined, controller.signal)
+        .then((result) => setPendingDeletions(result.pending))
+        .catch(() => {});
+    void check();
+    const timer = pendingDeletions > 0 ? setInterval(() => void check(), 30_000) : undefined;
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+    };
+  }, [admin, pendingDeletions]);
   const images = useMemo(
     () =>
       catalog.images.filter(
@@ -111,7 +126,7 @@ export function Gallery({
     [catalog, category, search],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
-  const save = async (next: Catalog) => {
+  const save = async (next: Catalog, deleteObjects?: string[]) => {
     const encrypted = await encryptCatalog(initial.vault, next);
     task.signal.throwIfAborted();
     const objects = next.images.flatMap((image) => [
@@ -119,15 +134,16 @@ export function Gallery({
       image.thumbnail.id,
       image.preview.id,
     ]);
-    const result = await api<{ revision: number }>(
+    const result = await api<{ revision: number; pending?: number }>(
       '/catalog',
       'PUT',
-      { revision: revision.current, catalog: encrypted, objects },
+      { revision: revision.current, catalog: encrypted, objects, deleteObjects },
       task.signal,
     );
     task.signal.throwIfAborted();
     revision.current = result.revision;
     setCatalog(next);
+    if (result.pending !== undefined) setPendingDeletions(result.pending);
   };
   const upload = (files: File[]) =>
     void task.run(async (signal) => {
@@ -299,6 +315,13 @@ export function Gallery({
           </span>
         </div>
         <ErrorNotice error={task.error} />
+        {pendingDeletions > 0 && (
+          <p role="alert">
+            The image was removed from the gallery, but {pendingDeletions} encrypted files still
+            need deletion. The server retries every 30 seconds. Check storage permissions if this
+            message persists.
+          </p>
+        )}
         {progress && (
           <div className="upload-progress" role="status">
             <span className="spinner" />
@@ -426,7 +449,12 @@ export function Gallery({
             });
           }}
           remove={async () => {
-            await save({ ...catalog, images: catalog.images.filter((i) => i.id !== selected) });
+            const image = images[selectedIndex];
+            await save({ ...catalog, images: catalog.images.filter((i) => i.id !== selected) }, [
+              image.original.id,
+              image.thumbnail.id,
+              image.preview.id,
+            ]);
             setSelected(null);
           }}
         />
@@ -466,6 +494,12 @@ function Viewer({
     [category, setCategory] = useState(image.category);
   const startX = useRef(0),
     task = useTask();
+  const detailsRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (!editing) return;
+    detailsRef.current?.focus({ preventScroll: true });
+    detailsRef.current?.scrollIntoView({ block: 'start', behavior: 'instant' });
+  }, [editing, confirmDelete]);
   useEffect(() => {
     const handle = (event: KeyboardEvent) => {
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes((event.target as HTMLElement).tagName)) return;
@@ -540,13 +574,37 @@ function Viewer({
             <Icon name="download" size={17} />
             Download original
           </button>
-          {admin && <button onClick={() => setEditing(!editing)}>Edit details</button>}
+          {admin && (
+            <span className="image-admin-actions">
+              <button
+                aria-expanded={editing}
+                aria-controls="image-details"
+                onClick={() => setEditing(!editing)}
+              >
+                Edit details
+              </button>
+              <button
+                className="danger"
+                disabled={task.busy}
+                onClick={() => {
+                  setEditing(true);
+                  setConfirmDelete(true);
+                }}
+              >
+                Delete
+              </button>
+            </span>
+          )}
         </div>
       </div>
       <ErrorNotice error={task.error} />
       {editing && (
         <form
+          ref={detailsRef}
+          id="image-details"
           className="edit-details"
+          aria-label="Image details"
+          tabIndex={-1}
           onSubmit={(e) => {
             e.preventDefault();
             void task.run(async () => {
@@ -582,13 +640,18 @@ function Viewer({
             disabled={task.busy}
             onClick={() => (confirmDelete ? void task.run(remove) : setConfirmDelete(true))}
           >
-            {confirmDelete ? 'Confirm removal' : 'Remove image'}
+            {confirmDelete ? 'Confirm permanent deletion' : 'Permanently delete'}
           </button>
           {confirmDelete && (
-            <p className="muted">
-              This removes the image from the gallery. Encrypted copies remain on the server and in
-              backups until maintenance removes them.
-            </p>
+            <div className="delete-confirmation">
+              <p>
+                This permanently deletes the original, preview, and thumbnail from this server. You
+                cannot undo it. Separate backups and downloaded copies are not deleted.
+              </p>
+              <button type="button" disabled={task.busy} onClick={() => setConfirmDelete(false)}>
+                Cancel deletion
+              </button>
+            </div>
           )}
         </form>
       )}

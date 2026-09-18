@@ -4,8 +4,13 @@ import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { withMaintenanceLock } from './maintenance.js';
 
 export async function createBackup(dataDir: string, destination: string) {
+  return withMaintenanceLock(dataDir, () => copyBackup(dataDir, destination));
+}
+
+async function copyBackup(dataDir: string, destination: string) {
   const source = await realpath(dataDir);
   const target = resolve(destination);
   const inside = relative(source, target);
@@ -32,6 +37,8 @@ export async function createBackup(dataDir: string, destination: string) {
     snapshot.exec(
       'DELETE FROM sessions; DELETE FROM challenges; DELETE FROM invitations; DELETE FROM objects WHERE id NOT IN (SELECT id FROM current_objects);',
     );
+    if (snapshot.prepare("SELECT 1 FROM sqlite_master WHERE name='pending_deletions'").get())
+      snapshot.exec('DELETE FROM pending_deletions');
     snapshot.pragma('journal_mode = DELETE');
     snapshot.exec('VACUUM');
   } finally {

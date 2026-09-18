@@ -150,6 +150,45 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
     .fill('a new passphrase for recovery testing');
   await page.getByRole('button', { name: 'Recover and unlock' }).click();
   await expect(page.getByRole('button', { name: 'View private-garden.png' })).toBeVisible();
+  for (const viewport of [
+    { width: 1280, height: 600 },
+    { width: 390, height: 640 },
+  ]) {
+    await page.setViewportSize(viewport);
+    await page.getByRole('button', { name: 'View private-garden.png' }).click();
+    await page.getByRole('button', { name: 'Edit details', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('button', { name: 'Save details' })).toBeInViewport({ ratio: 1 });
+    await expect(dialog.getByRole('button', { name: 'Permanently delete' })).toBeInViewport({
+      ratio: 1,
+    });
+    await dialog
+      .getByRole('combobox', { name: 'Category', exact: true })
+      .selectOption(viewport.width > 720 ? '' : 'Private walks');
+    await page.screenshot({ path: `test-results/image-details-${viewport.width}.png` });
+    await dialog.getByRole('button', { name: 'Save details' }).click();
+    await expect(dialog.locator('.edit-details')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  }
+  await page.getByRole('button', { name: 'View private-garden.png' }).click();
+  await page.getByRole('button', { name: 'Delete', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Confirm permanent deletion' })).toBeInViewport({
+    ratio: 1,
+  });
+  await page.getByRole('button', { name: 'Cancel deletion' }).click();
+  await expect(page.getByRole('button', { name: 'Permanently delete', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Permanently delete', exact: true }).click();
+  await page.getByRole('button', { name: 'Confirm permanent deletion' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'View private-garden.png' })).toHaveCount(0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Sign in with passkey' }).click();
+  await page
+    .getByLabel('Vault passphrase', { exact: true })
+    .fill('a new passphrase for recovery testing');
+  await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Upload images', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'View private-garden.png' })).toHaveCount(0);
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
 });

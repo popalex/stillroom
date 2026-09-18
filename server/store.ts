@@ -33,7 +33,8 @@ export function openStore(dataDir: string) {
     );
     CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, created INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS current_objects (id TEXT PRIMARY KEY REFERENCES objects(id));
-    PRAGMA user_version = 1;
+    CREATE TABLE IF NOT EXISTS pending_deletions (id TEXT PRIMARY KEY);
+    PRAGMA user_version = 2;
   `);
   return db;
 }

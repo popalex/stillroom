@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
 import { openStore } from '../../server/store';
+import { withMaintenanceLock } from '../../server/maintenance';
 import { createBackup } from '../../server/backup';
 import {
   createVault,
@@ -61,6 +62,10 @@ it('restores a consistent snapshot without active sessions or unreferenced objec
       Date.now(),
       '100.80.0.1',
     );
+    db.prepare('INSERT INTO pending_deletions VALUES (?)').run(orphan);
+    await withMaintenanceLock(source, async () => {
+      await expect(createBackup(source, target)).rejects.toThrow('backup or deletion');
+    });
     expect(await createBackup(source, target)).toBe(1);
     const manifest = JSON.parse(await readFile(join(target, 'manifest.json'), 'utf8'));
     for (const file of manifest.files)
@@ -74,6 +79,7 @@ it('restores a consistent snapshot without active sessions or unreferenced objec
     try {
       expect(restoreDB.prepare('SELECT * FROM sessions').all()).toHaveLength(0);
       expect(restoreDB.prepare('SELECT * FROM objects').all()).toHaveLength(1);
+      expect(restoreDB.prepare('SELECT * FROM pending_deletions').all()).toHaveLength(0);
       const row = restoreDB.prepare('SELECT * FROM vault').get() as {
         envelope: string;
         catalog: string;

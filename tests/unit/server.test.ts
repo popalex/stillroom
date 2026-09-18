@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, readdirSync, existsSync, mkdirSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { buildApp, hash } from '../../server/app.js';
+import { drainDeletions } from '../../server/deletions.js';
+import { withMaintenanceLock } from '../../server/maintenance.js';
 import { openStore } from '../../server/store.js';
 
 describe('private API', () => {
@@ -228,6 +230,130 @@ describe('private API', () => {
     expect(image.rawPayload).toEqual(Buffer.alloc(64, 7));
     expect(image.headers['cache-control']).toBe('no-store');
     expect(readdirSync(join(dir, 'tmp'))).toEqual([]);
+  });
+  async function imageForDeletion() {
+    const initial = vault();
+    await app.inject({ method: 'POST', url: '/api/vault', headers: headers(), payload: initial });
+    const ids = Array.from({ length: 4 }, () => randomUUID());
+    for (const id of ids) {
+      expect(
+        (
+          await app.inject({
+            method: 'PUT',
+            url: `/api/objects/${id}`,
+            headers: { ...headers(), 'content-type': 'application/octet-stream' },
+            payload: Buffer.alloc(64, 7),
+          })
+        ).statusCode,
+      ).toBe(201);
+    }
+    await app.inject({
+      method: 'PUT',
+      url: '/api/catalog',
+      headers: headers(),
+      payload: { revision: 1, catalog: initial.catalog, objects: ids },
+    });
+    return {
+      ids,
+      payload: {
+        revision: 2,
+        catalog: initial.catalog,
+        objects: ids.slice(3),
+        deleteObjects: ids.slice(0, 3),
+      },
+    };
+  }
+  it('permanently deletes only the selected files and rejects stale or unauthorized deletion', async () => {
+    const { ids, payload } = await imageForDeletion();
+    const request = { method: 'PUT' as const, url: '/api/catalog', headers: headers(), payload };
+    expect(
+      (await app.inject({ ...request, headers: headers(viewerToken, '100.80.0.2') })).statusCode,
+    ).toBe(403);
+    expect(
+      (await app.inject({ ...request, payload: { ...payload, revision: 1 } })).statusCode,
+    ).toBe(409);
+    expect(
+      (
+        await app.inject({
+          ...request,
+          payload: { ...payload, deleteObjects: [ids[0], ids[1], ids[3]] },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(readdirSync(join(dir, 'objects'))).toHaveLength(4);
+    mkdirSync(join(dir, 'maintenance.lock'));
+    expect((await app.inject(request)).statusCode).toBe(409);
+    rmdirSync(join(dir, 'maintenance.lock'));
+    const deleted = await app.inject(request);
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ revision: 3, pending: 0 });
+    expect(readdirSync(join(dir, 'objects'))).toEqual([ids[3]]);
+    for (const id of ids.slice(0, 3))
+      expect((await app.inject({ url: `/api/objects/${id}`, headers: headers() })).statusCode).toBe(
+        404,
+      );
+    expect(
+      (await app.inject({ url: `/api/objects/${ids[3]}`, headers: headers() })).rawPayload,
+    ).toEqual(Buffer.alloc(64, 7));
+    expect(
+      (
+        await app.inject({
+          ...request,
+          payload: { revision: 3, catalog: payload.catalog, objects: ids },
+        })
+      ).statusCode,
+    ).toBe(400);
+    const db = openStore(dir);
+    expect(db.prepare('SELECT * FROM objects').all()).toHaveLength(1);
+    expect(db.prepare('SELECT * FROM pending_deletions').all()).toHaveLength(0);
+    db.close();
+  });
+  it('keeps failed file deletions queued and retries safely after restart', async () => {
+    const { ids, payload } = await imageForDeletion();
+    // A directory in place of one object forces unlink to fail on every platform.
+    const blocked = join(dir, 'objects', ids[0]);
+    rmSync(blocked);
+    mkdirSync(blocked);
+    const result = await app.inject({
+      method: 'PUT',
+      url: '/api/catalog',
+      headers: headers(),
+      payload,
+    });
+    expect(result.json()).toEqual({ revision: 3, pending: 1 });
+    expect((await app.inject({ url: '/api/deletions', headers: headers() })).json()).toEqual({
+      pending: 1,
+    });
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/catalog',
+          headers: headers(),
+          payload: {
+            revision: 3,
+            catalog: payload.catalog,
+            objects: [ids[0], ids[3]],
+          },
+        })
+      ).statusCode,
+    ).toBe(400);
+    await app.close();
+    rmdirSync(blocked);
+    app = await buildApp({
+      origin: 'https://test.example.ts.net',
+      rpID: 'test.example.ts.net',
+      dataDir: dir,
+      production: true,
+      proxySecret: secret,
+    });
+    expect((await app.inject({ url: '/api/deletions', headers: headers() })).json()).toEqual({
+      pending: 0,
+    });
+    expect(existsSync(blocked)).toBe(false);
+    const db = openStore(dir);
+    expect(await withMaintenanceLock(dir, () => drainDeletions(db, dir))).toBe(0);
+    db.close();
   });
   it('revokes active sessions immediately and protects the current admin', async () => {
     expect(

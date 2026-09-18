@@ -72,7 +72,7 @@ Node.js 24 is an LTS release. SimpleWebAuthn currently documents Node LTS 22 and
 
    SQLite stores credentials, VPN peer associations, roles, challenge/session records, encrypted key envelopes, encrypted catalog revisions, and object inventory. Image ciphertext lives in a private directory using random IDs as filenames. Do not store plaintext image names or category associations in database columns. Protect database journals, temporary ciphertext, and operational files with the host's encrypted volume too.
 
-   Back up a consistent SQLite snapshot and all referenced immutable objects. Pause deletion during backup and define a retention period for removed objects. Keep encrypted backups off the server and recovery secrets separately offline. Test restoration onto a clean instance, including authentication re-enrollment when necessary. Full-disk encryption requires an explicit boot-unlock procedure; unattended unlock changes its protection against physical theft.
+   Back up a consistent SQLite snapshot and all referenced immutable objects. A filesystem lock prevents deletion during backup. Permanent deletion commits the new catalog and a durable cleanup queue together, then unlinks the selected files. Failed cleanup retries at startup and every 30 seconds. Existing backups retain their own copies. Keep encrypted backups off the server and recovery secrets separately offline. Test restoration onto a clean instance, including authentication re-enrollment when necessary. Full-disk encryption requires an explicit boot-unlock procedure; unattended unlock changes its protection against physical theft.
 
 7. Implement a small working path first.
 

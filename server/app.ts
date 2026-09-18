@@ -25,6 +25,8 @@ import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
 import { envelopeSchema, packetSchema, idSchema, type Role } from '../shared/protocol.js';
 import { openStore } from './store.js';
+import { drainDeletions } from './deletions.js';
+import { withMaintenanceLock } from './maintenance.js';
 import type { Config } from './config.js';
 
 type Credential = {
@@ -78,6 +80,19 @@ export const CONTENT_SECURITY_POLICY =
 export async function buildApp(config: Config) {
   const app = Fastify({ logger: false, bodyLimit: 3_000_000, requestTimeout: 120_000 });
   const db = openStore(config.dataDir);
+  let cleanup: Promise<unknown> | undefined;
+  const retryDeletions = () => {
+    if (cleanup || !db.prepare('SELECT 1 FROM pending_deletions LIMIT 1').get()) return;
+    cleanup = withMaintenanceLock(config.dataDir, () => drainDeletions(db, config.dataDir))
+      .catch(() => {})
+      .finally(() => {
+        cleanup = undefined;
+      });
+  };
+  retryDeletions();
+  await cleanup;
+  const cleanupTimer = setInterval(retryDeletions, 30_000);
+  cleanupTimer.unref();
   const registered = () => !!db.prepare('SELECT 1 FROM credentials LIMIT 1').get();
   const bootstrapFile = join(config.dataDir, 'bootstrap-token');
   let bootstrapToken = config.bootstrapToken || '';
@@ -99,6 +114,8 @@ export async function buildApp(config: Config) {
   await app.register(cookie);
   await app.register(rateLimit, { global: false, keyGenerator: (req) => req.deviceIP });
   app.addHook('onClose', async () => {
+    clearInterval(cleanupTimer);
+    await cleanup;
     db.close();
   });
   app.setErrorHandler((error: Error & { statusCode?: number; code?: string }, _req, reply) => {
@@ -463,9 +480,10 @@ export async function buildApp(config: Config) {
         revision: z.number().int().positive(),
         catalog: packetSchema,
         objects: z.array(idSchema).max(30_000),
+        deleteObjects: z.array(idSchema).length(3).optional(),
       })
       .parse(req.body);
-    db.transaction(() => {
+    const commit = db.transaction(() => {
       const v = db.prepare('SELECT * FROM vault').get() as Vault | undefined;
       if (
         !v ||
@@ -475,17 +493,52 @@ export async function buildApp(config: Config) {
         fail(400, 'Invalid catalog.');
       if (v!.revision !== input.revision)
         fail(409, 'The collection changed in another tab. Reload before saving.');
-      const exists = db.prepare('SELECT 1 FROM objects WHERE id=?');
+      const exists = db.prepare(
+        'SELECT 1 FROM objects WHERE id=? AND id NOT IN (SELECT id FROM pending_deletions)',
+      );
       for (const id of input.objects)
         if (!exists.get(id)) fail(400, 'An image upload has not completed.');
+      if (input.deleteObjects) {
+        const current = (
+          db.prepare('SELECT id FROM current_objects').all() as { id: string }[]
+        ).map((o) => o.id);
+        const currentSet = new Set(current);
+        const next = new Set(input.objects);
+        const removed = current.filter((id) => !next.has(id));
+        const deleted = new Set(input.deleteObjects);
+        if (
+          deleted.size !== 3 ||
+          removed.length !== 3 ||
+          removed.some((id) => !deleted.has(id)) ||
+          input.objects.some((id) => !currentSet.has(id))
+        )
+          fail(400, 'Deletion must remove exactly the selected image files.');
+        const queue = db.prepare('INSERT INTO pending_deletions VALUES (?)');
+        for (const id of deleted) queue.run(id);
+      }
       db.prepare('UPDATE vault SET catalog=?, revision=revision+1 WHERE singleton=1').run(
         JSON.stringify(input.catalog),
       );
       db.prepare('DELETE FROM current_objects').run();
       const insert = db.prepare('INSERT OR IGNORE INTO current_objects VALUES (?)');
       for (const id of input.objects) insert.run(id);
-    })();
+    });
+    if (input.deleteObjects)
+      return withMaintenanceLock(config.dataDir, async () => {
+        commit();
+        const pending = await drainDeletions(db, config.dataDir);
+        return { revision: input.revision + 1, pending };
+      });
+    commit();
     return { revision: input.revision + 1 };
+  });
+  app.get('/api/deletions', async (req) => {
+    admin(req);
+    return {
+      pending: (
+        db.prepare('SELECT count(*) AS count FROM pending_deletions').get() as { count: number }
+      ).count,
+    };
   });
   app.addContentTypeParser('application/octet-stream', (_req, payload, done) =>
     done(null, payload),

@@ -633,6 +633,8 @@ dialog::backdrop {
   width: calc(100vw - 60px);
   max-width: 1500px;
   padding: 20px;
+  overscroll-behavior-y: contain;
+  scroll-padding-block: 20px;
 }
 .viewer-dialog .dialog-heading h2 {
   font-size: 16px;
@@ -695,13 +697,18 @@ dialog::backdrop {
   padding: 7px 10px;
   font-size: 12px;
 }
+.image-admin-actions {
+  display: inline-flex;
+  gap: 8px;
+}
 .edit-details {
   grid-template-columns: 1fr 1fr auto auto;
   align-items: end;
   border-top: 1px solid var(--line);
   padding-top: 22px;
+  scroll-margin-block: 12px;
 }
-.edit-details p {
+.edit-details .delete-confirmation {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 12px;
