@@ -2,6 +2,7 @@ node_modules/
 dist/
 dist-server/
 data/
+data-tailscale/
 .env
 .env.*
 !.env.example
@@ -10,4 +11,3 @@ playwright-report/
 test-results/
 *.tsbuildinfo
 backups/
-

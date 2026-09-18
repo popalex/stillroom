@@ -11,8 +11,9 @@
     "test": "vitest run tests/unit",
     "test:e2e": "playwright test",
     "backup": "tsx server/backup.ts",
-    "format": "prettier --write src server shared tests *.ts *.json *.yaml",
-    "format:check": "prettier --check src server shared tests *.ts *.json *.yaml"
+    "format": "prettier --write scripts src server shared tests *.ts *.json *.yaml",
+    "format:check": "prettier --check scripts src server shared tests *.ts *.json *.yaml",
+    "setup:tailscale": "node scripts/setup-tailscale.mjs"
   },
   "type": "module",
   "dependencies": {
