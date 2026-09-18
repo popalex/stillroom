@@ -1,0 +1,21 @@
+:root {
+  --paper: #f5f7f8;
+  --white: #ffffff;
+  --ink: #21323d;
+  --muted: #687c89;
+  --line: #d8e0e5;
+  --wash: #e9eff2;
+  --navy: #213847;
+  --navy-light: #304c5d;
+  --navy-frame: #456271;
+  --nav-muted: #a5bcc9;
+  --teal: #386c73;
+  --teal-dark: #2c5960;
+  --sea: #a0c9c8;
+  --focus: #71a9ba;
+  --danger: #a64040;
+  --error-bg: #fff1f0;
+  --error-border: #e7c5c1;
+  --body: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --utility: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+}
