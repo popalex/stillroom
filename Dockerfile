@@ -2,8 +2,8 @@ FROM node:24-bookworm-slim AS build
 RUN corepack enable && corepack prepare pnpm@11.5.2 --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --frozen-lockfile \
+    && node --input-type=module -e 'import Database from "better-sqlite3"; const db = new Database(":memory:"); db.exec("SELECT 1"); db.close();'
 COPY . .
 RUN pnpm build && pnpm prune --prod
 

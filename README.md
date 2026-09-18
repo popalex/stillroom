@@ -36,6 +36,8 @@ The first implementation includes passkey enrollment and login, device permissio
    docker compose up -d
    ```
 
+   The Docker build uses better-sqlite3's packaged native binary and tests it during installation. It does not install GCC, G++, binutils, make, or Python. Unsupported platforms fail that check instead of compiling a binary. Only esbuild's installation script is enabled in pnpm's build allowlist.
+
    Configure Caddy with `deploy/Caddyfile`. Give its service the three variables shown in `deploy/caddy-environment.example`, with the same proxy secret as the application. Keep the service environment file readable only by its administrator. Caddy binds only to the configured Tailscale IPv4 address and overwrites the proxy authentication headers. The app's Docker port binds only to host loopback. Serve the whole application through this route. Do not publish port 3000 on a public or LAN interface, and do not enable Tailscale Funnel for the gallery.
 
    The production app fails closed without HTTPS configuration and a proxy secret. It also rejects non-Tailscale source addresses. Verify the actual listener and firewall configuration on the host, including IPv6. Local host processes are trusted within this deployment boundary.
