@@ -40,12 +40,9 @@
     "vite": "^8.3.0",
     "vitest": "^5.0.1"
   },
-  "allowScripts": {
-    "better-sqlite3@13.0.3": true,
-    "esbuild@0.28.2": true
-  },
   "private": true,
   "engines": {
     "node": ">=24 <25"
-  }
+  },
+  "packageManager": "pnpm@11.5.2"
 }
