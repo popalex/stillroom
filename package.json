@@ -5,12 +5,14 @@
   "scripts": {
     "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
     "dev:server": "tsx watch server/index.ts",
-    "build": "tsc --noEmit && vite build",
-    "start": "tsx server/index.ts",
+    "build": "tsc --noEmit && tsc -p tsconfig.server.json && vite build",
+    "start": "node dist-server/server/index.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run tests/unit",
     "test:e2e": "playwright test",
-    "backup": "tsx server/backup.ts"
+    "backup": "tsx server/backup.ts",
+    "format": "prettier --write src server shared tests *.ts *.json *.yaml",
+    "format:check": "prettier --check src server shared tests *.ts *.json *.yaml"
   },
   "type": "module",
   "dependencies": {
@@ -35,6 +37,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "concurrently": "^10.0.5",
+    "prettier": "^3.9.7",
     "tsx": "^4.23.13",
     "typescript": "^7.0.2",
     "vite": "^8.3.0",

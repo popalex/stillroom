@@ -1,0 +1,20 @@
+services:
+  viewer:
+    build: .
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3000:3000'
+    environment:
+      APP_ORIGIN: ${APP_ORIGIN:?Set the HTTPS Tailscale origin}
+      PROXY_SECRET: ${PROXY_SECRET:?Set a random proxy secret}
+    volumes:
+      - ${DATA_DIR:-./data}:/app/data
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    pids_limit: 128

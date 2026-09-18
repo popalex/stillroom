@@ -1,6 +1,6 @@
 Proposed technical solution
 
-This design implements [PLAN.md](PLAN.md). Upload and viewing both happen through one website. This document selects the implementation stack; no application has been built yet. Server location, actual client platforms, and library patch versions must be confirmed before deployment.
+This design implements [PLAN.md](PLAN.md). Upload and viewing both happen through one website. A first implementation is available; see [README.md](README.md) for commands, implemented behavior, and remaining limitations. Server location and actual client platforms must be confirmed before deployment. Dependencies are recorded in pnpm-lock.yaml.
 
 | Component | Choice | Responsibility |
 | --- | --- | --- |
@@ -20,7 +20,7 @@ Node.js 24 is an LTS release. SimpleWebAuthn currently documents Node LTS 22 and
 
    Run the server independently of the upload PC so the collection remains available when that PC is off. A home Linux machine or a rented Linux server can run the same application. Install Tailscale on the host and join the owner's existing tailnet. Hosting is not yet selected.
 
-   Bind Caddy's HTTPS listener only to the server's Tailscale address and block direct public access to the website, API, and SSH. Publish the API container port only on host loopback for Caddy to reach. Validate both IPv4 and IPv6 exposure with Docker enabled. Caddy serves the built frontend and forwards /api requests to Fastify on the same host. The encrypted object directory is not a static web root. Do not enable Funnel for this application or share the server with external users.
+   Bind Caddy's HTTPS listener only to the server's Tailscale address and block direct public access to the website, API, and SSH. Publish the API container port only on host loopback for Caddy to reach. Validate both IPv4 and IPv6 exposure with Docker enabled. Caddy forwards the website and /api requests to Fastify on the same host, which serves the built frontend. The encrypted object directory is not a static web root. Do not enable Funnel for this application or share the server with external users.
 
    Choose a neutral, stable machine name before issuing certificates or registering passkeys. Use the server's full MagicDNS .ts.net hostname as the website origin. Enable MagicDNS and HTTPS certificates as needed. Caddy's Tailscale integration obtains and renews the certificate through the local Tailscale daemon; grant only the required local certificate access. This avoids installing a private CA on every viewing device. The issued hostname becomes public through certificate transparency, while access to the website remains private. Use a private CA if disclosing the hostname is unacceptable. Never disable HTTPS certificate verification. See [Caddy certificates on Tailscale](https://tailscale.com/docs/integrations/web-servers/caddy/caddy-certificates) and [HTTPS configuration](https://tailscale.com/docs/how-to/set-up-https-certificates).
 

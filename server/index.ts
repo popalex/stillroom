@@ -5,5 +5,11 @@ process.umask(0o077);
 const config = configFromEnv();
 const app = await buildApp(config);
 await app.listen({ host: process.env.HOST || '127.0.0.1', port: Number(process.env.PORT || 3000) });
-console.log(`Stillroom listening at ${config.origin}. Initial enrollment code, if needed: ${config.dataDir}/bootstrap-token`);
-for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, async () => { await app.close(); process.exit(0); });
+console.log(
+  `Stillroom listening at ${config.origin}. Initial enrollment code, if needed: ${config.dataDir}/bootstrap-token`,
+);
+for (const signal of ['SIGINT', 'SIGTERM'])
+  process.on(signal, async () => {
+    await app.close();
+    process.exit(0);
+  });

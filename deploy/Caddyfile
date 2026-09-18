@@ -1,0 +1,14 @@
+{
+    auto_https disable_redirects
+    admin off
+}
+
+{$TAILSCALE_HOSTNAME} {
+    bind {$TAILSCALE_IPV4}
+    reverse_proxy 127.0.0.1:3000 {
+        header_up X-Vault-Proxy-Secret {$PROXY_SECRET}
+        header_up X-Vault-Client-IP {remote_host}
+        header_up -Forwarded
+        header_up -X-Forwarded-For
+    }
+}

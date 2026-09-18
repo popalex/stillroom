@@ -1,6 +1,6 @@
 Private image viewer implementation plan
 
-This is a proposed design, not an implemented or security-reviewed application. One designated PC uploads images; other PCs, laptops, and mobile devices view them. The proposed default encrypts images on the upload PC and decrypts them on each viewing device. Hosting location and whether the owner trusts the server with decrypted images remain open decisions.
+This plan defines the intended design. A first implementation now exists; [README.md](README.md) records its behavior and limitations. It has not undergone an independent security review. One designated PC uploads images; other PCs, laptops, and mobile devices view them. Browsers encrypt images on the upload PC and decrypt them on viewing devices. Hosting location remains an open decision.
 
 Both uploading and viewing happen through the same responsive website. On the upload PC, open the site, authenticate, unlock the vault, and select images through a file picker or drag and drop. The website's code running in that browser creates previews and encrypts the files before sending them to the server. No separate uploader application or command-line import is required. On another PC, laptop, or phone, open the same site, authenticate, unlock the vault, and browse the gallery. A VPN client is still required by the proposed private-network deployment.
 
