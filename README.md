@@ -23,13 +23,26 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Locking or backgrounding the page discards the gallery state and signs out. Five minutes without interaction also locks it. No plaintext images or keys are intentionally stored in browser storage. Browser memory, device screenshots, source images on the upload PC, and downloaded originals remain outside any secure-erasure guarantee.
 
-3. Run through Tailscale on Ubuntu or Debian.
+3. Run with Docker Compose and Tailscale Serve.
 
-   The server stays on and stores the encrypted collection. Install Tailscale on every viewing device and sign in to your tailnet. Install Docker with Compose on the server, and [install Caddy using its official package instructions](https://caddyserver.com/docs/install#debian-ubuntu-raspbian).
+   Docker Compose runs the gallery and Tailscale together. You do not need Caddy, a host reverse proxy, or certificate files. The Tailscale container joins your tailnet as its own device, named `stillroom`. Your existing host Tailscale installation can keep running. Viewing devices need Tailscale and a browser.
 
-   You do not need to buy a certificate or supply certificate files. In the [Tailscale DNS admin page](https://login.tailscale.com/admin/dns), enable MagicDNS and HTTPS certificates. Caddy obtains the certificate through the local Tailscale daemon. Use a neutral machine name before enabling certificates, since the hostname appears in public certificate logs. The website remains accessible only through your tailnet. See [Tailscale's HTTPS setup](https://tailscale.com/docs/how-to/set-up-https-certificates) and [Caddy integration](https://tailscale.com/docs/integrations/web-servers/caddy/caddy-certificates).
+   In the [Tailscale DNS admin page](https://login.tailscale.com/admin/dns), enable MagicDNS and HTTPS certificates. Tailscale Serve obtains and renews the certificate. Certificate issuance makes the hostname public, while website access stays inside your tailnet. See [Tailscale Serve](https://tailscale.com/docs/features/tailscale-serve).
 
-   Stop `pnpm dev` with Ctrl+C to free port 3000. From this repository, generate the deployment settings:
+   From this repository, start Tailscale:
+
+   ```sh
+   docker compose up -d tailscale
+   docker compose logs tailscale
+   ```
+
+   Open the login URL in the logs and authorize `stillroom` in your Tailscale account. This is a one-time browser login; no auth key needs to be stored in `.env`. If your tailnet requires device approval, approve the new node in the admin console too. Check that login has completed:
+
+   ```sh
+   docker compose exec tailscale tailscale status
+   ```
+
+   Generate the app configuration and start the gallery:
 
    ```sh
    pnpm setup:tailscale
@@ -37,65 +50,44 @@ The first implementation includes passkey enrollment and login, device permissio
    docker compose up -d --build
    ```
 
-   The setup command reads your machine's Tailscale hostname and IPv4 address, generates a shared proxy secret, and writes `.env` and `deploy/.env.caddy` with mode 0600. It prints the HTTPS address and refuses to overwrite existing configuration. It does not change Tailscale settings or start services. Both generated files are ignored by Git.
+   The setup command reads the container's actual Tailscale hostname and writes `.env` with mode 0600. It prints the HTTPS address to open, usually `https://stillroom.<your-tailnet>.ts.net`. Use that exact address on every device. It is different from the host PC's previous address. The command refuses to overwrite an existing `.env`; if one exists from the earlier setup, move it aside or update its `APP_ORIGIN` to the container's hostname. `PROXY_SECRET` is no longer used.
 
-   This uses a fresh collection in `data-tailscale/`. Create a new passkey and vault at the HTTPS address, then upload your images there. Passkeys enrolled at `localhost` will not work at the new hostname. The development collection remains in `data/`; these steps do not migrate it. For sensitive images, put `DATA_DIR` on an encrypted volume. Compose does not configure disk encryption.
+   The gallery stores its encrypted collection in `data-tailscale/`. Local development data stays in `data/`. Passkeys created at `localhost` or the host PC's old hostname cannot authenticate at the new hostname. For a fresh test collection, use a new empty `DATA_DIR` and enroll again. Keep any existing data you intend to migrate. For sensitive images, put `DATA_DIR` on an encrypted volume; Compose does not configure disk encryption.
 
-   Allow Caddy to request the certificate. Open this file:
-
-   ```sh
-   sudoedit /etc/default/tailscaled
-   ```
-
-   Add or update this line, preserving other settings:
-
-   ```text
-   TS_PERMIT_CERT_UID=caddy
-   ```
-
-   Install the Caddy configuration and restart the services. These commands assume a dedicated Caddy instance; if it already serves other sites, merge the gallery configuration first.
-
-   ```sh
-   sudo install -m 600 deploy/.env.caddy /etc/caddy/stillroom.env
-   sudo install -m 644 deploy/Caddyfile /etc/caddy/Caddyfile
-   sudo install -d /etc/systemd/system/caddy.service.d
-   sudo install -m 644 deploy/caddy.service.conf /etc/systemd/system/caddy.service.d/stillroom.conf
-   sudo systemctl daemon-reload
-   sudo systemctl restart tailscaled
-   sudo systemctl enable caddy
-   sudo systemctl restart caddy
-   ```
-
-   Restarting Tailscale briefly interrupts its connections. Caddy handles HTTPS on port 443 bound to the Tailscale IPv4 address, then forwards to the app on loopback port 3000. It supplies the proxy secret and the requesting device's Tailscale address, which the app checks at login and on every session request. This configuration does not use `tailscale serve` or Funnel. Proxying the development server directly would bypass the production deployment setup.
-
-   Open the `https://...ts.net` address printed by the setup command, with no port suffix. Use the full hostname on the upload PC and on every other device. For the first enrollment, read the generated code locally:
+   Read the initial enrollment code locally:
 
    ```sh
    cat data-tailscale/bootstrap-token
    ```
 
-   Enter the code on the setup page, register your upload PC's passkey, choose the vault passphrase, and save the recovery secret. The code file disappears after enrollment. Follow step 4 to enroll your laptop or phone.
+   Enter it on the website, create your upload PC's passkey, choose a vault passphrase, and save the recovery secret. The code file disappears after enrollment. Follow step 4 to add your laptop or phone.
 
-   If the page does not open, check the services:
+   No container ports are published to the host. The gallery listens only on loopback inside Tailscale's network namespace. Serve forwards HTTPS requests there and overwrites client address headers; the API checks that address against the enrolled device. Funnel is disabled in `deploy/serve.json`, and the API rejects requests marked as Funnel traffic. This setup requires a Linux Docker host with `/dev/net/tun`. Only the Tailscale container receives `NET_ADMIN` for its network namespace. The gallery drops all capabilities. Keep `TS_USERSPACE=false`: userspace mode forwards incoming ports to loopback and would bypass this listener isolation. Docker administrators and the Tailscale container are trusted within this deployment boundary. The container settings follow [Tailscale's Docker configuration](https://tailscale.com/docs/features/containers/docker/docker-params).
+
+   Restrict access to this node's HTTPS port to your own devices in your tailnet policy. Existing broad grants remain effective because permissions are additive. Device credentials and viewer/admin permissions are still enforced by the app.
+
+   If the site does not open, inspect:
 
    ```sh
    docker compose ps
-   docker compose logs --tail=50 viewer
-   sudo journalctl -u caddy -n 50 --no-pager
-   tailscale status
+   docker compose logs --tail=50 tailscale viewer
+   docker compose exec tailscale tailscale status
+   docker compose exec tailscale tailscale serve status
    ```
 
-   Certificate errors usually mean HTTPS certificates are disabled or Caddy cannot access the local Tailscale daemon. A proxy-authentication error means the two generated environment files have different secrets. A port-3000 conflict usually means the development server is still running. If the host firewall blocks HTTPS, allow TCP 443 on `tailscale0`. Restrict tailnet HTTPS access to your own devices; existing broad grants remain effective because permissions are additive. Keep port 3000 on loopback and leave Funnel disabled.
+   A pending login or device approval prevents startup. Missing HTTPS support usually means MagicDNS or HTTPS certificates need enabling in Tailscale. An origin error means `.env` does not match the container's actual hostname. After changing `.env`, recreate the viewer with `docker compose up -d viewer`.
 
-   After code changes, run `docker compose up -d --build`. Use `sudo systemctl restart caddy` after changing its configuration. The provided Caddyfile disables its administration endpoint, so `caddy reload` is unavailable.
+   On later starts and after application changes, use `docker compose up -d --build`. Tailscale's identity persists in the `tailscale-state` Docker volume; keep that volume when stopping the stack. `docker compose down` preserves it, while `docker compose down -v` deletes it and requires a new Tailscale login. The image is pinned by digest; update the digest when upgrading Tailscale, then recreate both services together.
 
-   The Docker build uses better-sqlite3's packaged native binary and tests it during installation. It does not install GCC, G++, binutils, make, or Python. Unsupported platforms fail that check instead of compiling a binary. Only esbuild's installation script is enabled in pnpm's build allowlist.
+   If you followed the old Caddy instructions solely for this gallery, stop that unused service with `sudo systemctl disable --now caddy`. Leave it running if it serves other sites. The new containers do not depend on its files or the old certificate-permission setting.
+
+   The gallery Docker build uses better-sqlite3's packaged native binary and tests it during installation. It does not install GCC, G++, binutils, make, or Python. Unsupported platforms fail that check instead of compiling a binary. Only esbuild's installation script is enabled in pnpm's build allowlist.
 
 4. Enroll another device.
 
    On the upload PC, open Manage devices, enter the new device's Tailscale IP address, choose viewing access, and create an enrollment code. On the new device, open the same website, select Set up a new device, and enter that code within ten minutes. Register a passkey and enter your vault passphrase locally.
 
-   Sessions and credentials are bound to the enrolled source address. The provided Caddy configuration uses Tailscale IPv4. If a device is removed and re-enrolled in Tailscale with a different address, enroll its app credential again. Keep a second administrative credential available, ideally backed by a spare hardware key. To enroll it, issue an administrative invitation for the intended device address.
+   Sessions and credentials are bound to the enrolled source address. Use the device address shown by Tailscale. Both Tailscale IPv4 and IPv6 addresses are accepted, but enrollment and subsequent access must use the same address. If a device is removed and re-enrolled in Tailscale with a different address, enroll its app credential again. Keep a second administrative credential available, ideally backed by a spare hardware key. To enroll it, issue an administrative invitation for the intended device address.
 
    Revoke a lost device's passkey from another administrative session and remove the device from Tailscale. A copied decryption key or already-downloaded images cannot be revoked. Full key rotation and collection re-encryption are not automated in this version. Suspected vault-key exposure requires creating a new vault and importing from trusted originals.
 

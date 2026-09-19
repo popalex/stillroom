@@ -143,12 +143,15 @@ export async function buildApp(config: Config) {
   });
   app.addHook('onRequest', async (req) => {
     if (config.production) {
-      const secret = req.headers['x-vault-proxy-secret'];
-      const ip = req.headers['x-vault-client-ip'];
+      // Serve overwrites these headers. Only its shared container loopback is trusted.
+      const peer = normalizeIP(req.raw.socket.remoteAddress || '');
+      const ip = req.headers['x-forwarded-for'];
       if (
-        typeof secret !== 'string' ||
-        !equal(secret, config.proxySecret) ||
-        typeof ip !== 'string'
+        peer !== '127.0.0.1' ||
+        typeof ip !== 'string' ||
+        req.headers['x-forwarded-proto'] !== 'https' ||
+        req.headers['x-forwarded-host'] !== new URL(config.origin).host ||
+        req.headers['tailscale-funnel-request'] !== undefined
       )
         fail(403, 'Use the private HTTPS address.');
       req.deviceIP = normalizeIP(ip as string);

@@ -1,3 +1,0 @@
-TAILSCALE_HOSTNAME=your-server.your-tailnet.ts.net
-TAILSCALE_IPV4=100.64.0.10
-PROXY_SECRET=the-same-random-secret-as-the-application

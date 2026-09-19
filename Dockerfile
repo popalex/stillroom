@@ -16,5 +16,5 @@ COPY --from=build --chown=node:node /app/dist ./dist
 COPY --from=build --chown=node:node /app/dist-server ./dist-server
 RUN mkdir /app/data && chown node:node /app/data
 USER node
-ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000 DATA_DIR=/app/data
+ENV NODE_ENV=production HOST=127.0.0.1 PORT=3000 DATA_DIR=/app/data
 CMD ["node", "dist-server/server/index.js"]

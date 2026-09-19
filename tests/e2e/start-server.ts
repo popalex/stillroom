@@ -8,7 +8,7 @@ const app = await buildApp({
   origin: 'http://localhost:4173',
   rpID: 'localhost',
   production: false,
-  proxySecret: '',
+  host: '127.0.0.1',
   dataDir,
   staticDir: resolve('dist'),
   bootstrapToken: 'e'.repeat(64),

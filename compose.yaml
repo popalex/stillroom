@@ -1,14 +1,47 @@
 services:
+  tailscale:
+    image: tailscale/tailscale:stable@sha256:2667499ed87ae29218f292556ba062918402dd5e92e93637af14867e4df12dd3
+    hostname: stillroom
+    restart: unless-stopped
+    environment:
+      TS_HOSTNAME: stillroom
+      TS_AUTH_ONCE: 'true'
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: 'false'
+      TS_ACCEPT_DNS: 'false'
+      TS_SERVE_CONFIG: /config/serve.json
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+      - ./deploy:/config:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - NET_ADMIN
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ['CMD', 'tailscale', 'status', '--peers=false']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    mem_limit: 256m
+    pids_limit: 128
+
   viewer:
     build: .
     restart: unless-stopped
-    ports:
-      - '127.0.0.1:3000:3000'
+    network_mode: service:tailscale
+    depends_on:
+      tailscale:
+        condition: service_healthy
+        restart: true
     environment:
-      APP_ORIGIN: ${APP_ORIGIN:?Set the HTTPS Tailscale origin}
-      PROXY_SECRET: ${PROXY_SECRET:?Set a random proxy secret}
+      APP_ORIGIN: ${APP_ORIGIN:-}
+      HOST: 127.0.0.1
     volumes:
-      - ${DATA_DIR:-./data}:/app/data
+      - ${DATA_DIR:-./data-tailscale}:/app/data
     read_only: true
     tmpfs:
       - /tmp:size=32m,mode=1777
@@ -18,3 +51,6 @@ services:
       - no-new-privileges:true
     mem_limit: 512m
     pids_limit: 128
+
+volumes:
+  tailscale-state:

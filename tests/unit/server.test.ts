@@ -12,14 +12,14 @@ import { openStore } from '../../server/store.js';
 describe('private API', () => {
   let app: FastifyInstance;
   let dir: string;
-  const secret = 'p'.repeat(64);
   const adminToken = 'a'.repeat(64);
   const viewerToken = 'v'.repeat(64);
   const headers = (session = adminToken, ip = '100.80.0.1') => ({
     origin: 'https://test.example.ts.net',
     'x-vault-request': '1',
-    'x-vault-proxy-secret': secret,
-    'x-vault-client-ip': ip,
+    'x-forwarded-for': ip,
+    'x-forwarded-proto': 'https',
+    'x-forwarded-host': 'test.example.ts.net',
     cookie: `__Host-stillroom=${session}`,
   });
   beforeEach(async () => {
@@ -29,7 +29,7 @@ describe('private API', () => {
       rpID: 'test.example.ts.net',
       dataDir: dir,
       production: true,
-      proxySecret: secret,
+      host: '127.0.0.1',
       bootstrapToken: 'b'.repeat(64),
     });
     const db = openStore(dir);
@@ -82,7 +82,8 @@ describe('private API', () => {
       (
         await app.inject({
           url: '/api/status',
-          headers: { ...headers(), 'x-vault-proxy-secret': 'bad' },
+          headers: headers(),
+          remoteAddress: '172.18.0.2',
         })
       ).statusCode,
     ).toBe(403);
@@ -91,6 +92,41 @@ describe('private API', () => {
     for (const url of ['/api/vault', `/api/objects/${randomUUID()}`, '/api/devices']) {
       expect((await app.inject({ url, headers: headers('invalid') })).statusCode).toBe(401);
     }
+  });
+  it('rejects ambiguous forwarded addresses, wrong HTTPS hosts, and Funnel traffic', async () => {
+    for (const overrides of [
+      { 'x-forwarded-for': '100.80.0.1, 100.80.0.2' },
+      { 'x-forwarded-for': '127.0.0.1' },
+      { 'x-forwarded-for': 'fd00::1' },
+      { 'x-forwarded-for': '' },
+      { 'x-forwarded-host': 'attacker.example' },
+      { 'x-forwarded-proto': 'http' },
+      { 'tailscale-funnel-request': '?1' },
+    ]) {
+      expect(
+        (await app.inject({ url: '/api/status', headers: { ...headers(), ...overrides } }))
+          .statusCode,
+      ).toBe(403);
+    }
+    expect(
+      (await app.inject({ url: '/api/status', headers: headers('', 'fd7a:115c:a1e0::1') }))
+        .statusCode,
+    ).toBe(200);
+  });
+  it('ignores client-supplied identity headers when binding a session', async () => {
+    expect(
+      (
+        await app.inject({
+          url: '/api/vault',
+          headers: {
+            ...headers(adminToken, '100.80.0.2'),
+            'x-vault-client-ip': '100.80.0.1',
+            forwarded: 'for=100.80.0.1;proto=https',
+            'tailscale-user-login': 'admin@example.com',
+          },
+        })
+      ).statusCode,
+    ).toBe(401);
   });
   it('binds sessions to the enrolled device', async () => {
     expect(
@@ -345,7 +381,7 @@ describe('private API', () => {
       rpID: 'test.example.ts.net',
       dataDir: dir,
       production: true,
-      proxySecret: secret,
+      host: '127.0.0.1',
     });
     expect((await app.inject({ url: '/api/deletions', headers: headers() })).json()).toEqual({
       pending: 0,

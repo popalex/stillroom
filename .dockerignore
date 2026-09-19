@@ -3,6 +3,9 @@ dist
 dist-server
 .git
 data
+data-tailscale
+**/.env
+**/.env.*
 backups
 .env
 .env.*
