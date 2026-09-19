@@ -3,6 +3,9 @@ import { encryptObject, type VaultKey } from './crypto/vault';
 import { uploadObject } from './api';
 
 const MAX_PIXELS = 40_000_000;
+// Grid cards are at most ~320 CSS px wide, so 640 keeps them sharp on a 2x screen.
+export const THUMBNAIL_EDGE = 640;
+const PREVIEW_EDGE = 2048;
 function dimensions(bytes: Uint8Array, mime: string): [number, number] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (
@@ -92,8 +95,8 @@ export async function importImage(
     height = bitmap.height;
   try {
     checkDimensions(width, height);
-    thumbnail = await renderPreview(bitmap, 320);
-    preview = await renderPreview(bitmap, 2048);
+    thumbnail = await renderPreview(bitmap, THUMBNAIL_EDGE);
+    preview = await renderPreview(bitmap, PREVIEW_EDGE);
     const refs: Partial<Record<'original' | 'thumbnail' | 'preview', ImageEntry['original']>> = {};
     for (const [purpose, bytes] of [
       ['original', original],
@@ -121,12 +124,23 @@ export async function importImage(
       original: refs.original!,
       thumbnail: refs.thumbnail!,
       preview: refs.preview!,
+      thumbEdge: THUMBNAIL_EDGE,
     };
   } finally {
     bitmap.close();
     original.fill(0);
     thumbnail?.fill(0);
     preview?.fill(0);
+  }
+}
+// Rebuilds a thumbnail from an already decrypted preview, for images stored
+// before THUMBNAIL_EDGE grew.
+export async function renderThumbnail(preview: Uint8Array<ArrayBuffer>) {
+  const bitmap = await createImageBitmap(new Blob([preview], { type: 'image/webp' }));
+  try {
+    return await renderPreview(bitmap, THUMBNAIL_EDGE);
+  } finally {
+    bitmap.close();
   }
 }
 export { dimensions };

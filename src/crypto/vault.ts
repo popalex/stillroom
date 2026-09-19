@@ -235,6 +235,7 @@ const imageSchema = z
     original: refSchema,
     thumbnail: refSchema,
     preview: refSchema,
+    thumbEdge: z.number().int().positive().max(20_000).optional(),
   })
   .strict();
 const catalogSchema = z

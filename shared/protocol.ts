@@ -68,6 +68,9 @@ export type ImageEntry = {
   original: ObjectRef;
   thumbnail: ObjectRef;
   preview: ObjectRef;
+  // Longest edge the thumbnail was rendered at. Absent on images stored before
+  // the gallery asked for more than 320px.
+  thumbEdge?: number;
 };
 export type Catalog = { v: 1; categories: string[]; images: ImageEntry[] };
 export type Status = {

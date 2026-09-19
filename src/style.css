@@ -610,6 +610,12 @@ h2 {
   font-size: 12px;
   overflow-wrap: anywhere;
 }
+.upload-progress button {
+  margin-left: auto;
+  white-space: nowrap;
+  padding: 7px 12px;
+  font-size: 12px;
+}
 .spinner {
   width: 14px;
   height: 14px;

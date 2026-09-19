@@ -15,9 +15,9 @@ import {
   type Preferences,
   type SortOrder,
 } from '../shared/protocol';
-import { api, fetchObject } from './api';
-import { decryptObject, encryptCatalog, type VaultKey } from './crypto/vault';
-import { importImage } from './images';
+import { api, fetchObject, uploadObject } from './api';
+import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
+import { importImage, renderThumbnail, THUMBNAIL_EDGE } from './images';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
 
@@ -193,6 +193,48 @@ export function Gallery({
     setCatalog(next);
     if (result.pending !== undefined) setPendingDeletions(result.pending);
   };
+  const soft = catalog.images.filter((image) => (image.thumbEdge ?? 0) < THUMBNAIL_EDGE);
+  // Images stored before THUMBNAIL_EDGE grew keep their smaller thumbnail until
+  // it is rebuilt here, from the preview rather than the original.
+  const sharpen = () =>
+    void task.run(async (signal) => {
+      let next = catalog;
+      try {
+        for (let index = 0; index < soft.length; index++) {
+          const image = soft[index];
+          setProgress(`${index + 1} / ${soft.length} · Rebuilding thumbnail · ${image.name}`);
+          const preview = await decryptObject(
+            initial.vault,
+            image.preview,
+            await fetchObject(image.preview.id, signal),
+          );
+          signal.throwIfAborted();
+          let thumbnail: Uint8Array | undefined;
+          try {
+            thumbnail = await renderThumbnail(preview);
+          } finally {
+            preview.fill(0);
+          }
+          const encrypted = await encryptObject(initial.vault, 'thumbnail', thumbnail);
+          thumbnail.fill(0);
+          signal.throwIfAborted();
+          await uploadObject(encrypted.ref.id, encrypted.data, signal);
+          encrypted.data.fill(0);
+          const replaced = image.thumbnail.id;
+          next = {
+            ...next,
+            images: next.images.map((entry) =>
+              entry.id === image.id
+                ? { ...entry, thumbnail: encrypted.ref, thumbEdge: THUMBNAIL_EDGE }
+                : entry,
+            ),
+          };
+          await save(next, [replaced]);
+        }
+      } finally {
+        if (!signal.aborted) setProgress('');
+      }
+    });
   const upload = (files: File[]) =>
     void task.run(async (signal) => {
       let next = catalog;
@@ -408,6 +450,15 @@ export function Gallery({
             Removed from the gallery, but {pendingDeletions} encrypted files still need deletion.
             The server retries every 30 seconds. Check storage permissions if this message persists.
           </p>
+        )}
+        {admin && soft.length > 0 && !task.busy && (
+          <div className="upload-progress">
+            <span>
+              {soft.length} {soft.length === 1 ? 'thumbnail was' : 'thumbnails were'} made at a
+              lower resolution and look soft on this screen.
+            </span>
+            <button onClick={sharpen}>Rebuild thumbnails</button>
+          </div>
         )}
         {progress && (
           <div className="upload-progress" role="status">
