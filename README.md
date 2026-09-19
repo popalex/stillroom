@@ -21,7 +21,7 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Use Sort by to choose filename A to Z or Z to A, or date added newest or oldest first. Date added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
 
-   Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Preview zoom uses the generated preview; it does not fetch a full-resolution original automatically.
+   Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Zoom with the scroll wheel, a pinch, a double click or double tap, the `+` and `-` keys, or the toolbar buttons, and drag to move around a zoomed image. Press `0` or the percentage button to fit the image to the window again. Zooming uses the generated preview; it does not fetch a full-resolution original automatically.
 
    Administrators can rename images and change their category through Edit details. Choose New category there to create a category and move the image into it with Save details.
 
