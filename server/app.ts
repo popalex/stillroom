@@ -496,7 +496,8 @@ export async function buildApp(config: Config) {
     if (!result.changes) fail(409, 'The vault changed. Reload before saving.');
     return { revision: input.revision + 1 };
   });
-  app.put('/api/catalog', async (req) => {
+  // The global body limit is far below a large collection's encrypted catalog.
+  app.put('/api/catalog', { bodyLimit: 6_000_000 }, async (req) => {
     admin(req);
     const input = z
       .object({

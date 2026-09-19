@@ -377,6 +377,25 @@ describe('private API', () => {
       },
     };
   }
+  it('accepts a catalog far larger than the default body limit', async () => {
+    const initial = vault();
+    await app.inject({ method: 'POST', url: '/api/vault', headers: headers(), payload: initial });
+    const commit = (length: number) =>
+      app.inject({
+        method: 'PUT',
+        url: '/api/catalog',
+        headers: headers(),
+        payload: {
+          revision: 1,
+          catalog: { ...initial.catalog, data: 'A'.repeat(length) },
+          objects: [],
+        },
+      });
+    // a collection of a few thousand images lands around here
+    expect((await commit(4_000_000)).statusCode).toBe(200);
+    // and the schema still bounds it
+    expect((await commit(5_600_004)).statusCode).toBe(400);
+  });
   it('swaps a rebuilt thumbnail in and deletes only the file it replaced', async () => {
     const { ids, initial } = await imageForDeletion(3, 0);
     const replacement = randomUUID();

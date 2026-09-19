@@ -10,6 +10,8 @@ import {
   unlockVault,
 } from '../../src/crypto/vault';
 import { deriveArgon } from '../../src/crypto/argon';
+import { packetSchema } from '../../shared/protocol';
+import { randomUUID } from 'node:crypto';
 
 const passphrase = 'copper orchard sailboat winter river';
 describe('encrypted vault format', () => {
@@ -82,6 +84,38 @@ describe('encrypted vault format', () => {
     await expect(
       decryptCatalog(vault, { ...packet, ref: { ...packet.ref, purpose: 'preview' } }),
     ).rejects.toThrow();
+  });
+  it('carries a large collection and stops at the catalog size limit', async () => {
+    const { vault } = await createVault(passphrase, deriveArgon);
+    const one = new Uint8Array([1]);
+    const refs = {
+      original: (await encryptObject(vault, 'original', one)).ref,
+      thumbnail: (await encryptObject(vault, 'thumbnail', one)).ref,
+      preview: (await encryptObject(vault, 'preview', one)).ref,
+    };
+    const entry = (index: number) => ({
+      id: randomUUID(),
+      name: `photograph-${index}.jpeg`,
+      category: 'Walks',
+      added: new Date().toISOString(),
+      mime: 'image/jpeg' as const,
+      width: 4000,
+      height: 3000,
+      bytes: 900_000,
+      ...refs,
+      thumbEdge: 640,
+    });
+    const images = Array.from({ length: 3000 }, (_, index) => entry(index));
+    const catalog = { v: 1 as const, categories: ['Walks'], images };
+    const packet = await encryptCatalog(vault, catalog);
+    // the packet schema has to hold what encryptCatalog is willing to produce
+    expect(packetSchema.parse(packet).data.length).toBe(packet.data.length);
+    expect((await decryptCatalog(vault, packet)).images).toHaveLength(3000);
+    const tooMany = {
+      ...catalog,
+      images: [...images, ...Array.from({ length: 3000 }, (_, i) => entry(i + 3000))],
+    };
+    await expect(encryptCatalog(vault, tooMany)).rejects.toThrow('size limit');
   });
   it('rejects unbounded KDF parameters before deriving a key', async () => {
     const { envelope } = await createVault(passphrase, deriveArgon);

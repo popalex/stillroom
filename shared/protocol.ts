@@ -28,8 +28,10 @@ export const refSchema = z
     key: boxSchema,
   })
   .strict();
+// Base64 runs about 1.34x the plaintext, so this holds a catalog up to the
+// 4 MB limit encryptCatalog enforces, with room for the tag.
 export const packetSchema = z
-  .object({ v: z.literal(1), ref: refSchema, data: base64(2_000_000) })
+  .object({ v: z.literal(1), ref: refSchema, data: base64(5_600_000) })
   .strict();
 export const envelopeSchema = z
   .object({

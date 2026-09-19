@@ -247,7 +247,9 @@ const catalogSchema = z
   .strict();
 export async function encryptCatalog(vault: VaultKey, catalog: Catalog): Promise<Packet> {
   const bytes = encoder.encode(JSON.stringify(catalogSchema.parse(catalog)));
-  if (bytes.length > 1_400_000)
+  // About 4300 images at current entry sizes. The packet and the catalog route's
+  // body limit are sized from this.
+  if (bytes.length > 4_000_000)
     throw new Error('The catalog reached the size limit for this version.');
   const encrypted = await encryptObject(vault, 'catalog', bytes);
   return { v: 1, ref: encrypted.ref, data: toBase64(encrypted.data) };

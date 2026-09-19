@@ -27,6 +27,8 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Administrators can rename images and change their category through Edit details. Choose New category there to create a category and move the image into it with Save details.
 
+   The encrypted catalog holds every image's filename, category, and keys, and the browser refuses to commit one over 4 MB, which is roughly 4300 images. A collection approaching that needs the catalog split into chunks, which this version does not do.
+
    Each upload stores three encrypted files: the original, a 2048px preview, and a 640px thumbnail for the grid. Images uploaded before thumbnails grew to 640px still have 320px ones, and the gallery offers Rebuild thumbnails while any remain. That runs in the browser: it decrypts each preview, renders a new thumbnail, uploads it, and deletes the file it replaced. Leave the tab open until it finishes, and run it from the upload PC, since viewing devices cannot write to the collection.
 
    Delete category removes a category and every image in it. On Uncategorized the same button reads Delete uncategorized and removes every image without a category, leaving the categories alone. Both include images hidden by the current search.
