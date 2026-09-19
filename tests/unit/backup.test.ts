@@ -2,10 +2,11 @@ import { it, expect } from 'vitest';
 import { mkdtemp, readFile, writeFile, rm, cp } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { openStore } from '../../server/store';
 import { withMaintenanceLock } from '../../server/maintenance';
 import { createBackup } from '../../server/backup';
+import { sweepOrphans } from '../../server/deletions';
 import {
   createVault,
   encryptCatalog,
@@ -103,5 +104,36 @@ it('restores a consistent snapshot without active sessions or unreferenced objec
   } finally {
     db.close();
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+it('sweeps uploaded files that no catalog commit ever adopted', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'stillroom-sweep-'));
+  const db = openStore(dir);
+  try {
+    const put = async (id: string, age: number, current: boolean) => {
+      await writeFile(join(dir, 'objects', id), Buffer.alloc(32, 1));
+      db.prepare('INSERT INTO objects VALUES (?,?,?)').run(id, 32, Date.now() - age);
+      if (current) db.prepare('INSERT INTO current_objects VALUES (?)').run(id);
+    };
+    const kept = randomUUID(),
+      inFlight = randomUUID(),
+      queued = randomUUID(),
+      orphan = randomUUID();
+    await put(kept, 5 * 3_600_000, true);
+    await put(inFlight, 60_000, false);
+    await put(queued, 5 * 3_600_000, false);
+    await put(orphan, 5 * 3_600_000, false);
+    db.prepare('INSERT INTO pending_deletions VALUES (?)').run(queued);
+    expect(await withMaintenanceLock(dir, () => sweepOrphans(db, dir))).toBe(1);
+    const left = (db.prepare('SELECT id FROM objects ORDER BY id').all() as { id: string }[]).map(
+      (o) => o.id,
+    );
+    expect(left.sort()).toEqual([kept, inFlight, queued].sort());
+    await expect(readFile(join(dir, 'objects', orphan))).rejects.toThrow();
+    await expect(readFile(join(dir, 'objects', inFlight))).resolves.toBeDefined();
+  } finally {
+    db.close();
+    await rm(dir, { recursive: true, force: true });
   }
 });

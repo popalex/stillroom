@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, readdirSync, existsSync, mkdirSync, rmdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  rmSync,
+  readdirSync,
+  existsSync,
+  mkdirSync,
+  rmdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -377,6 +385,30 @@ describe('private API', () => {
       },
     };
   }
+  it('sweeps stale uploaded files when it starts', async () => {
+    const store = openStore(dir);
+    const orphan = randomUUID(),
+      recent = randomUUID();
+    for (const [id, age] of [
+      [orphan, 5 * 3_600_000],
+      [recent, 30_000],
+    ] as const) {
+      writeFileSync(join(dir, 'objects', id), Buffer.alloc(16, 3));
+      store.prepare('INSERT INTO objects VALUES (?,?,?)').run(id, 16, Date.now() - age);
+    }
+    store.close();
+    await app.close();
+    app = await buildApp({
+      origin: 'https://test.example.ts.net',
+      rpID: 'test.example.ts.net',
+      dataDir: dir,
+      production: true,
+      host: '127.0.0.1',
+      bootstrapToken: 'b'.repeat(64),
+    });
+    expect(existsSync(join(dir, 'objects', orphan))).toBe(false);
+    expect(existsSync(join(dir, 'objects', recent))).toBe(true);
+  });
   it('accepts a catalog far larger than the default body limit', async () => {
     const initial = vault();
     await app.inject({ method: 'POST', url: '/api/vault', headers: headers(), payload: initial });

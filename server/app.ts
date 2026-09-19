@@ -32,7 +32,7 @@ import {
   type Role,
 } from '../shared/protocol.js';
 import { openStore } from './store.js';
-import { drainDeletions } from './deletions.js';
+import { drainDeletions, sweepOrphans } from './deletions.js';
 import { withMaintenanceLock } from './maintenance.js';
 import type { Config } from './config.js';
 
@@ -96,10 +96,22 @@ export async function buildApp(config: Config) {
         cleanup = undefined;
       });
   };
+  const sweep = () => {
+    if (cleanup) return;
+    cleanup = withMaintenanceLock(config.dataDir, () => sweepOrphans(db, config.dataDir))
+      .catch(() => {})
+      .finally(() => {
+        cleanup = undefined;
+      });
+  };
   retryDeletions();
+  await cleanup;
+  sweep();
   await cleanup;
   const cleanupTimer = setInterval(retryDeletions, 30_000);
   cleanupTimer.unref();
+  const sweepTimer = setInterval(sweep, 24 * 3_600_000);
+  sweepTimer.unref();
   const registered = () => !!db.prepare('SELECT 1 FROM credentials LIMIT 1').get();
   const bootstrapFile = join(config.dataDir, 'bootstrap-token');
   let bootstrapToken = config.bootstrapToken || '';
@@ -122,6 +134,7 @@ export async function buildApp(config: Config) {
   await app.register(rateLimit, { global: false, keyGenerator: (req) => req.deviceIP });
   app.addHook('onClose', async () => {
     clearInterval(cleanupTimer);
+    clearInterval(sweepTimer);
     await cleanup;
     db.close();
   });
