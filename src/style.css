@@ -418,6 +418,7 @@ h2 {
 }
 .collection-toolbar {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
   gap: 20px;
@@ -428,6 +429,19 @@ h2 {
 }
 .search-label {
   width: min(100%, 330px);
+}
+.sort-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.sort-label select {
+  margin: 0;
+  width: auto;
+  min-width: 0;
+  padding: 9px 12px;
+  font-size: 13px;
 }
 .search-label input {
   margin: 0;
@@ -859,6 +873,12 @@ dialog::backdrop {
   }
   .search-label {
     width: 100%;
+  }
+  .sort-label {
+    width: 100%;
+  }
+  .sort-label select {
+    flex: 1;
   }
   .image-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));

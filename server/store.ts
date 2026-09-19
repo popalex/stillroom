@@ -34,7 +34,11 @@ export function openStore(dataDir: string) {
     CREATE TABLE IF NOT EXISTS objects (id TEXT PRIMARY KEY, bytes INTEGER NOT NULL, created INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS current_objects (id TEXT PRIMARY KEY REFERENCES objects(id));
     CREATE TABLE IF NOT EXISTS pending_deletions (id TEXT PRIMARY KEY);
-    PRAGMA user_version = 2;
+    CREATE TABLE IF NOT EXISTS device_preferences (
+      credential_id TEXT PRIMARY KEY REFERENCES credentials(id) ON DELETE CASCADE,
+      sort_order TEXT NOT NULL CHECK(sort_order IN ('date-desc','date-asc','name-asc','name-desc'))
+    );
+    PRAGMA user_version = 3;
   `);
   return db;
 }

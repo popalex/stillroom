@@ -119,6 +119,8 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await viewer.getByRole('button', { name: 'Unlock collection' }).click();
   await expect(viewer.getByRole('button', { name: 'View private-garden.png' })).toBeVisible();
   await expect(viewer.getByRole('button', { name: 'Upload images', exact: true })).toHaveCount(0);
+  await viewer.getByRole('combobox', { name: 'Sort by', exact: true }).selectOption('name-desc');
+  await expect(viewer.getByRole('combobox', { name: 'Sort by', exact: true })).toBeEnabled();
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
@@ -189,6 +191,52 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Upload images', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'View private-garden.png' })).toHaveCount(0);
+  const sort = page.getByRole('combobox', { name: 'Sort by', exact: true });
+  await expect(sort).toHaveValue('date-desc');
+  await page.getByLabel('Upload image files').setInputFiles(
+    ['photo2.png', 'alpha.png', 'photo10.png'].map((name) => ({
+      name,
+      mimeType: 'image/png',
+      buffer: png,
+    })),
+  );
+  await expect(page.getByRole('button', { name: 'Upload images', exact: true })).toBeEnabled();
+  const names = page.locator('.image-card .image-name');
+  await expect(names).toHaveText(['photo10.png', 'alpha.png', 'photo2.png']);
+  const catalogBeforeSorting = await page.evaluate(async () => (await fetch('/api/vault')).json());
+  for (const [order, expected] of [
+    ['date-asc', ['photo2.png', 'alpha.png', 'photo10.png']],
+    ['name-desc', ['photo10.png', 'photo2.png', 'alpha.png']],
+    ['name-asc', ['alpha.png', 'photo2.png', 'photo10.png']],
+  ] as const) {
+    await sort.selectOption(order);
+    await expect(sort).toBeEnabled();
+    await expect(names).toHaveText([...expected]);
+  }
+  expect(await page.evaluate(async () => (await fetch('/api/vault')).json())).toEqual(
+    catalogBeforeSorting,
+  );
+  await page.getByRole('button', { name: 'View alpha.png' }).click();
+  await page.getByRole('button', { name: 'Next image' }).click();
+  await expect(page.getByRole('dialog')).toHaveAccessibleName('photo2.png');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('photo');
+  await expect(names).toHaveText(['photo2.png', 'photo10.png']);
+  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('');
+  await page.getByRole('button', { name: /^Private walks/ }).click();
+  await expect(names).toHaveCount(0);
+  await page.getByRole('button', { name: /^All photographs/ }).click();
+  await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/sorting-mobile.png', fullPage: true });
+  await page.reload();
+  await page.getByRole('button', { name: 'Sign in with passkey' }).click();
+  await page
+    .getByLabel('Vault passphrase', { exact: true })
+    .fill('a new passphrase for recovery testing');
+  await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
+  await expect(sort).toHaveValue('name-asc');
+  await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
 });

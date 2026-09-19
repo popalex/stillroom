@@ -23,7 +23,14 @@ import { isIP } from 'node:net';
 import { Transform, type Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { envelopeSchema, packetSchema, idSchema, type Role } from '../shared/protocol.js';
+import {
+  envelopeSchema,
+  packetSchema,
+  idSchema,
+  preferencesSchema,
+  type SortOrder,
+  type Role,
+} from '../shared/protocol.js';
 import { openStore } from './store.js';
 import { drainDeletions } from './deletions.js';
 import { withMaintenanceLock } from './maintenance.js';
@@ -438,6 +445,19 @@ export async function buildApp(config: Config) {
     return { ok: true };
   });
 
+  app.get('/api/preferences', async (req) => {
+    const row = db
+      .prepare('SELECT sort_order FROM device_preferences WHERE credential_id=?')
+      .get(req.owner!.id) as { sort_order: SortOrder } | undefined;
+    return { sortOrder: row?.sort_order ?? 'date-desc' };
+  });
+  app.put('/api/preferences', async (req) => {
+    const preferences = preferencesSchema.parse(req.body);
+    db.prepare(
+      'INSERT INTO device_preferences (credential_id,sort_order) VALUES (?,?) ON CONFLICT(credential_id) DO UPDATE SET sort_order=excluded.sort_order',
+    ).run(req.owner!.id, preferences.sortOrder);
+    return preferences;
+  });
   app.get('/api/vault', async () => {
     const v = db.prepare('SELECT * FROM vault').get() as Vault | undefined;
     if (!v) fail(404, 'Create the vault from your upload device first.');

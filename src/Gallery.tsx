@@ -1,8 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Catalog, ImageEntry, ObjectRef, Status } from '../shared/protocol';
+import {
+  sortOrderSchema,
+  type Catalog,
+  type ImageEntry,
+  type ObjectRef,
+  type Status,
+  type Preferences,
+  type SortOrder,
+} from '../shared/protocol';
 import { api, fetchObject } from './api';
 import { decryptObject, encryptCatalog, type VaultKey } from './crypto/vault';
 import { importImage } from './images';
+import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
 
 function useImage(ref: ObjectRef, vault: VaultKey, enabled = true) {
@@ -100,6 +109,25 @@ export function Gallery({
   const task = useTask(),
     fileInput = useRef<HTMLInputElement>(null);
   const admin = user.role === 'admin';
+  const [sortOrder, setSortOrder] = useState<SortOrder>('date-desc');
+  const [sortLoaded, setSortLoaded] = useState(false);
+  const [sortLoadError, setSortLoadError] = useState('');
+  const sortTask = useTask();
+  useEffect(() => {
+    const controller = new AbortController();
+    void api<Preferences>('/preferences', 'GET', undefined, controller.signal)
+      .then((preferences) => {
+        if (!controller.signal.aborted) setSortOrder(preferences.sortOrder);
+      })
+      .catch((error) => {
+        if (!controller.signal.aborted)
+          setSortLoadError(`Could not load the saved sort order. ${message(error)}`);
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setSortLoaded(true);
+      });
+    return () => controller.abort();
+  }, [user.id]);
   const [pendingDeletions, setPendingDeletions] = useState(0);
   useEffect(() => {
     if (!admin) return;
@@ -117,13 +145,16 @@ export function Gallery({
   }, [admin, pendingDeletions]);
   const images = useMemo(
     () =>
-      catalog.images.filter(
-        (image) =>
-          (category === 'all' ||
-            (category === 'uncategorized' ? !image.category : image.category === category)) &&
-          image.name.toLowerCase().includes(search.toLowerCase()),
+      sortImages(
+        catalog.images.filter(
+          (image) =>
+            (category === 'all' ||
+              (category === 'uncategorized' ? !image.category : image.category === category)) &&
+            image.name.toLowerCase().includes(search.toLowerCase()),
+        ),
+        sortOrder,
       ),
-    [catalog, category, search],
+    [catalog, category, search, sortOrder],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
   const save = async (next: Catalog, deleteObjects?: string[]) => {
@@ -309,12 +340,40 @@ export function Gallery({
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
+          <label className="sort-label">
+            Sort by
+            <select
+              value={sortOrder}
+              disabled={!sortLoaded || sortTask.busy}
+              aria-busy={sortTask.busy}
+              onChange={(event) => {
+                const next = sortOrderSchema.parse(event.currentTarget.value);
+                void sortTask.run(async (signal) => {
+                  const previous = sortOrder;
+                  setSortOrder(next);
+                  setSortLoadError('');
+                  try {
+                    await api<Preferences>('/preferences', 'PUT', { sortOrder: next }, signal);
+                  } catch (error) {
+                    if (!signal.aborted) setSortOrder(previous);
+                    throw new Error(`Could not save the sort order. ${message(error)}`);
+                  }
+                });
+              }}
+            >
+              <option value="date-desc">Date added: newest first</option>
+              <option value="date-asc">Date added: oldest first</option>
+              <option value="name-asc">Filename: A to Z</option>
+              <option value="name-desc">Filename: Z to A</option>
+            </select>
+          </label>
           <span className="private-indicator">
             <span />
             Unlocked on this device
           </span>
         </div>
         <ErrorNotice error={task.error} />
+        <ErrorNotice error={sortLoadError || sortTask.error} />
         {pendingDeletions > 0 && (
           <p role="alert">
             The image was removed from the gallery, but {pendingDeletions} encrypted files still

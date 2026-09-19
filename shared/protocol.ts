@@ -52,6 +52,10 @@ export type ObjectRef = z.infer<typeof refSchema>;
 export type Packet = z.infer<typeof packetSchema>;
 export type Envelope = z.infer<typeof envelopeSchema>;
 export type Role = 'admin' | 'viewer';
+export const sortOrderSchema = z.enum(['date-desc', 'date-asc', 'name-asc', 'name-desc']);
+export const preferencesSchema = z.object({ sortOrder: sortOrderSchema }).strict();
+export type SortOrder = z.infer<typeof sortOrderSchema>;
+export type Preferences = z.infer<typeof preferencesSchema>;
 export type ImageEntry = {
   id: string;
   name: string;

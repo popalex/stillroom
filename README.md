@@ -19,6 +19,8 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Add a category, then choose images or drag them onto the gallery. JPEG, PNG, and non-animated WebP are supported, up to 25 MiB and 40 megapixels per original. Uploads run sequentially. Each completed image gets its own catalog commit, so earlier images survive a later failure. Retry a failed file by selecting it again. This version does not resume partial file uploads.
 
+   Use Sort by to choose filename A to Z or Z to A, or date added newest or oldest first. Date added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
+
    Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Preview zoom uses the generated preview; it does not fetch a full-resolution original automatically. Administrators can rename images and change their category through Edit details. Delete sits beside Edit details; the form also has a Permanently delete button. Confirm permanent deletion to delete the original, preview, and thumbnail from the live server. Empty categories can be created, but category rename/removal is not implemented yet.
 
    Locking or backgrounding the page discards the gallery state and signs out. Five minutes without interaction also locks it. No plaintext images or keys are intentionally stored in browser storage. Browser memory, device screenshots, source images on the upload PC, and downloaded originals remain outside any secure-erasure guarantee.

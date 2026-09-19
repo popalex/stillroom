@@ -89,7 +89,12 @@ describe('private API', () => {
     ).toBe(403);
   });
   it('requires a session for vault and direct object access', async () => {
-    for (const url of ['/api/vault', `/api/objects/${randomUUID()}`, '/api/devices']) {
+    for (const url of [
+      '/api/vault',
+      `/api/objects/${randomUUID()}`,
+      '/api/devices',
+      '/api/preferences',
+    ]) {
       expect((await app.inject({ url, headers: headers('invalid') })).statusCode).toBe(401);
     }
   });
@@ -154,7 +159,7 @@ describe('private API', () => {
       ).statusCode,
     ).toBe(403);
   });
-  it('enforces viewer permissions on every mutation', async () => {
+  it('enforces viewer permissions on collection and device mutations', async () => {
     const h = headers(viewerToken, '100.80.0.2');
     for (const [method, url] of [
       ['POST', '/api/vault'],
@@ -175,6 +180,78 @@ describe('private API', () => {
       payload: { token: 'b'.repeat(64), label: 'Another admin' },
     });
     expect(result.statusCode).toBe(403);
+  });
+  it('persists sort preferences per credential without changing the encrypted catalog', async () => {
+    const initial = vault();
+    await app.inject({ method: 'POST', url: '/api/vault', headers: headers(), payload: initial });
+    const before = (await app.inject({ url: '/api/vault', headers: headers() })).json();
+    const viewerHeaders = headers(viewerToken, '100.80.0.2');
+    expect((await app.inject({ url: '/api/preferences', headers: viewerHeaders })).json()).toEqual({
+      sortOrder: 'date-desc',
+    });
+    for (const sortOrder of ['name-asc', 'name-desc', 'date-asc', 'date-desc']) {
+      const response = await app.inject({
+        method: 'PUT',
+        url: '/api/preferences',
+        headers: viewerHeaders,
+        payload: { sortOrder },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ sortOrder });
+    }
+    await app.inject({
+      method: 'PUT',
+      url: '/api/preferences',
+      headers: viewerHeaders,
+      payload: { sortOrder: 'name-asc' },
+    });
+    expect((await app.inject({ url: '/api/preferences', headers: headers() })).json()).toEqual({
+      sortOrder: 'date-desc',
+    });
+    expect((await app.inject({ url: '/api/vault', headers: headers() })).json()).toEqual(before);
+    await app.close();
+    app = await buildApp({
+      origin: 'https://test.example.ts.net',
+      rpID: 'test.example.ts.net',
+      dataDir: dir,
+      production: true,
+      host: '127.0.0.1',
+    });
+    expect((await app.inject({ url: '/api/preferences', headers: viewerHeaders })).json()).toEqual({
+      sortOrder: 'name-asc',
+    });
+  });
+  it('validates preference writes and enforces session and origin checks', async () => {
+    for (const payload of [
+      { sortOrder: 'unknown' },
+      {},
+      { sortOrder: 'name-asc', credential_id: 'viewer' },
+    ]) {
+      expect(
+        (await app.inject({ method: 'PUT', url: '/api/preferences', headers: headers(), payload }))
+          .statusCode,
+      ).toBe(400);
+    }
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/preferences',
+          headers: headers('invalid'),
+          payload: { sortOrder: 'name-asc' },
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: '/api/preferences',
+          headers: { ...headers(), origin: 'https://attacker.example' },
+          payload: { sortOrder: 'name-asc' },
+        })
+      ).statusCode,
+    ).toBe(403);
   });
   it('binds invitations to the intended device and rejects ceremony replay', async () => {
     const invite = await app.inject({
