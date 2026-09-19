@@ -344,10 +344,10 @@ describe('private API', () => {
     expect(image.headers['cache-control']).toBe('no-store');
     expect(readdirSync(join(dir, 'tmp'))).toEqual([]);
   });
-  async function imageForDeletion() {
+  async function imageForDeletion(count = 4, removeCount = 3) {
     const initial = vault();
     await app.inject({ method: 'POST', url: '/api/vault', headers: headers(), payload: initial });
-    const ids = Array.from({ length: 4 }, () => randomUUID());
+    const ids = Array.from({ length: count }, () => randomUUID());
     for (const id of ids) {
       expect(
         (
@@ -371,11 +371,33 @@ describe('private API', () => {
       payload: {
         revision: 2,
         catalog: initial.catalog,
-        objects: ids.slice(3),
-        deleteObjects: ids.slice(0, 3),
+        objects: ids.slice(removeCount),
+        deleteObjects: ids.slice(0, removeCount),
       },
     };
   }
+  it('deletes multiple images together and rejects incomplete or duplicate deletion lists', async () => {
+    const { ids, payload } = await imageForDeletion(9, 6);
+    const request = { method: 'PUT' as const, url: '/api/catalog', headers: headers(), payload };
+    for (const deleteObjects of [ids.slice(0, 3), [...ids.slice(0, 5), ids[0]], ids.slice(0, 7)]) {
+      expect(
+        (await app.inject({ ...request, payload: { ...payload, deleteObjects } })).statusCode,
+      ).toBe(400);
+    }
+    expect(
+      (await app.inject({ ...request, headers: headers(viewerToken, '100.80.0.2') })).statusCode,
+    ).toBe(403);
+    expect(readdirSync(join(dir, 'objects'))).toHaveLength(9);
+    const deleted = await app.inject(request);
+    expect(deleted.statusCode).toBe(200);
+    expect(deleted.json()).toEqual({ revision: 3, pending: 0 });
+    expect(readdirSync(join(dir, 'objects')).sort()).toEqual(ids.slice(6).sort());
+    expect((await app.inject(request)).statusCode).toBe(409);
+    for (const id of ids.slice(0, 6))
+      expect((await app.inject({ url: `/api/objects/${id}`, headers: headers() })).statusCode).toBe(
+        404,
+      );
+  });
   it('permanently deletes only the selected files and rejects stale or unauthorized deletion', async () => {
     const { ids, payload } = await imageForDeletion();
     const request = { method: 'PUT' as const, url: '/api/catalog', headers: headers(), payload };

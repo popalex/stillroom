@@ -503,7 +503,7 @@ export async function buildApp(config: Config) {
         revision: z.number().int().positive(),
         catalog: packetSchema,
         objects: z.array(idSchema).max(30_000),
-        deleteObjects: z.array(idSchema).length(3).optional(),
+        deleteObjects: z.array(idSchema).min(3).max(30_000).optional(),
       })
       .parse(req.body);
     const commit = db.transaction(() => {
@@ -530,8 +530,9 @@ export async function buildApp(config: Config) {
         const removed = current.filter((id) => !next.has(id));
         const deleted = new Set(input.deleteObjects);
         if (
-          deleted.size !== 3 ||
-          removed.length !== 3 ||
+          deleted.size !== input.deleteObjects.length ||
+          deleted.size % 3 !== 0 ||
+          removed.length !== deleted.size ||
           removed.some((id) => !deleted.has(id)) ||
           input.objects.some((id) => !currentSet.has(id))
         )

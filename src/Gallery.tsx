@@ -87,6 +87,14 @@ const formatBytes = (bytes: number) =>
     ? `${(bytes / 1024 / 1024).toFixed(1)} MiB`
     : `${Math.round(bytes / 1024)} KiB`;
 
+function categoryName(value: string, categories: string[]) {
+  const name = value.trim();
+  if (!name || name.length > 80 || ['all', 'uncategorized'].includes(name.toLowerCase()))
+    throw new Error('Choose a different category name.');
+  if (categories.includes(name)) throw new Error('That category already exists.');
+  return name;
+}
+
 export function Gallery({
   initial,
   user,
@@ -103,6 +111,7 @@ export function Gallery({
     [selected, setSelected] = useState<string | null>(null);
   const [addingCategory, setAddingCategory] = useState(false),
     [newCategory, setNewCategory] = useState('');
+  const [deletingCategory, setDeletingCategory] = useState<string | null>(null);
   const [devices, setDevices] = useState(false),
     [progress, setProgress] = useState(''),
     [dragging, setDragging] = useState(false);
@@ -157,6 +166,7 @@ export function Gallery({
     [catalog, category, search, sortOrder],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
+  const categoryImages = catalog.images.filter((image) => image.category === deletingCategory);
   const save = async (next: Catalog, deleteObjects?: string[]) => {
     const encrypted = await encryptCatalog(initial.vault, next);
     task.signal.throwIfAborted();
@@ -318,6 +328,18 @@ export function Gallery({
             >
               <Icon name="lock" />
             </button>
+            {admin && catalog.categories.includes(category) && (
+              <button
+                className="primary destructive"
+                disabled={task.busy}
+                onClick={() => {
+                  task.setError('');
+                  setDeletingCategory(category);
+                }}
+              >
+                Delete category
+              </button>
+            )}
             {admin && (
               <button
                 className="primary"
@@ -376,9 +398,8 @@ export function Gallery({
         <ErrorNotice error={sortLoadError || sortTask.error} />
         {pendingDeletions > 0 && (
           <p role="alert">
-            The image was removed from the gallery, but {pendingDeletions} encrypted files still
-            need deletion. The server retries every 30 seconds. Check storage permissions if this
-            message persists.
+            Removed from the gallery, but {pendingDeletions} encrypted files still need deletion.
+            The server retries every 30 seconds. Check storage permissions if this message persists.
           </p>
         )}
         {progress && (
@@ -451,17 +472,59 @@ export function Gallery({
           </div>
         )}
       </main>
+      {deletingCategory !== null && (
+        <Dialog title="Delete category" onClose={() => !task.busy && setDeletingCategory(null)}>
+          <p>
+            Permanently delete "{deletingCategory}" and all {categoryImages.length}{' '}
+            {categoryImages.length === 1 ? 'image' : 'images'} in it?
+          </p>
+          <p className="muted">
+            This includes images hidden by search. Originals, previews, and thumbnails will be
+            deleted from this server. You cannot undo this. Separate backups and downloaded copies
+            are not deleted.
+          </p>
+          <ErrorNotice error={task.error} />
+          <div className="dialog-actions">
+            <button disabled={task.busy} onClick={() => setDeletingCategory(null)}>
+              Cancel
+            </button>
+            <button
+              className="primary destructive"
+              disabled={task.busy}
+              onClick={() =>
+                void task.run(async () => {
+                  const objects = categoryImages.flatMap((image) => [
+                    image.original.id,
+                    image.thumbnail.id,
+                    image.preview.id,
+                  ]);
+                  await save(
+                    {
+                      ...catalog,
+                      categories: catalog.categories.filter((name) => name !== deletingCategory),
+                      images: catalog.images.filter((image) => image.category !== deletingCategory),
+                    },
+                    objects.length ? objects : undefined,
+                  );
+                  setSelected(null);
+                  setCategory('all');
+                  setSearch('');
+                  setDeletingCategory(null);
+                })
+              }
+            >
+              {task.busy ? 'Deleting…' : 'Permanently delete category'}
+            </button>
+          </div>
+        </Dialog>
+      )}
       {addingCategory && (
         <Dialog title="Add a category" onClose={() => setAddingCategory(false)}>
           <form
             onSubmit={(e) => {
               e.preventDefault();
               void task.run(async () => {
-                const name = newCategory.trim();
-                if (!name || ['all', 'uncategorized'].includes(name.toLowerCase()))
-                  throw new Error('Choose a different category name.');
-                if (catalog.categories.includes(name))
-                  throw new Error('That category already exists.');
+                const name = categoryName(newCategory, catalog.categories);
                 await save({ ...catalog, categories: [...catalog.categories, name] });
                 setCategory(name);
                 setNewCategory('');
@@ -501,9 +564,12 @@ export function Gallery({
               ? () => setSelected(images[selectedIndex + 1].id)
               : undefined
           }
-          save={async (changes) => {
+          save={async (changes, newCategory) => {
             await save({
               ...catalog,
+              categories: newCategory
+                ? [...catalog.categories, categoryName(newCategory, catalog.categories)]
+                : catalog.categories,
               images: catalog.images.map((i) => (i.id === selected ? { ...i, ...changes } : i)),
             });
           }}
@@ -542,7 +608,7 @@ function Viewer({
   onClose: () => void;
   previous?: () => void;
   next?: () => void;
-  save: (changes: Pick<ImageEntry, 'name' | 'category'>) => Promise<void>;
+  save: (changes: Pick<ImageEntry, 'name' | 'category'>, newCategory?: string) => Promise<void>;
   remove: () => Promise<void>;
 }) {
   const { url, error } = useImage(image.preview, vault);
@@ -551,6 +617,8 @@ function Viewer({
     [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState(image.name),
     [category, setCategory] = useState(image.category);
+  const [creatingCategory, setCreatingCategory] = useState(false),
+    [newCategory, setNewCategory] = useState('');
   const startX = useRef(0),
     task = useTask();
   const detailsRef = useRef<HTMLFormElement>(null);
@@ -656,7 +724,7 @@ function Viewer({
           )}
         </div>
       </div>
-      <ErrorNotice error={task.error} />
+      {!editing && <ErrorNotice error={task.error} />}
       {editing && (
         <form
           ref={detailsRef}
@@ -667,7 +735,13 @@ function Viewer({
           onSubmit={(e) => {
             e.preventDefault();
             void task.run(async () => {
-              await save({ name: name.trim(), category });
+              const addedCategory = creatingCategory
+                ? categoryName(newCategory, categories)
+                : undefined;
+              await save({ name: name.trim(), category: addedCategory ?? category }, addedCategory);
+              if (addedCategory) setCategory(addedCategory);
+              setCreatingCategory(false);
+              setNewCategory('');
               setEditing(false);
             });
           }}
@@ -681,15 +755,40 @@ function Viewer({
               required
             />
           </label>
-          <label>
-            Category
-            <select value={category} onChange={(e) => setCategory(e.target.value)}>
-              <option value="">Uncategorized</option>
-              {categories.map((c) => (
-                <option key={c}>{c}</option>
-              ))}
-            </select>
-          </label>
+          <div className="category-field">
+            {creatingCategory ? (
+              <label>
+                New category name
+                <input
+                  autoFocus
+                  required
+                  maxLength={80}
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                />
+              </label>
+            ) : (
+              <label>
+                Category
+                <select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="">Uncategorized</option>
+                  {categories.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button
+              type="button"
+              disabled={task.busy}
+              onClick={() => {
+                task.setError('');
+                setCreatingCategory(!creatingCategory);
+              }}
+            >
+              {creatingCategory ? 'Use existing category' : 'New category'}
+            </button>
+          </div>
           <button className="primary" disabled={task.busy}>
             Save details
           </button>
@@ -701,6 +800,9 @@ function Viewer({
           >
             {confirmDelete ? 'Confirm permanent deletion' : 'Permanently delete'}
           </button>
+          <div className="details-error">
+            <ErrorNotice error={task.error} />
+          </div>
           {confirmDelete && (
             <div className="delete-confirmation">
               <p>

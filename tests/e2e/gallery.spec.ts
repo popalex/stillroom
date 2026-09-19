@@ -119,6 +119,8 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await viewer.getByRole('button', { name: 'Unlock collection' }).click();
   await expect(viewer.getByRole('button', { name: 'View private-garden.png' })).toBeVisible();
   await expect(viewer.getByRole('button', { name: 'Upload images', exact: true })).toHaveCount(0);
+  await viewer.getByRole('button', { name: /^Private walks/ }).click();
+  await expect(viewer.getByRole('button', { name: 'Delete category', exact: true })).toHaveCount(0);
   await viewer.getByRole('combobox', { name: 'Sort by', exact: true }).selectOption('name-desc');
   await expect(viewer.getByRole('combobox', { name: 'Sort by', exact: true })).toBeEnabled();
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
@@ -237,6 +239,74 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
   await expect(sort).toHaveValue('name-asc');
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
+  await expect(page.getByRole('button', { name: 'Delete category', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: /^Private walks/ }).click();
+  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('all 0 images');
+  await page.getByRole('button', { name: 'Permanently delete category', exact: true }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^Private walks/ })).toHaveCount(0);
+  await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
+
+  for (const [filename, width] of [
+    ['alpha.png', 1280],
+    ['photo2.png', 390],
+  ] as const) {
+    await page.setViewportSize({ width, height: 640 });
+    await page.getByRole('button', { name: `View ${filename}`, exact: true }).click();
+    await page.getByRole('button', { name: 'Edit details', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await dialog.getByRole('button', { name: 'New category', exact: true }).click();
+    await dialog.getByLabel('New category name', { exact: true }).fill(' Uncategorized ');
+    await dialog.getByRole('button', { name: 'Save details', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('Choose a different category name');
+    if (filename === 'alpha.png') {
+      await dialog.getByLabel('New category name', { exact: true }).fill('  To delete  ');
+    } else {
+      await dialog.getByLabel('New category name', { exact: true }).fill('To delete');
+      await dialog.getByRole('button', { name: 'Save details', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('That category already exists');
+      await dialog.getByRole('button', { name: 'Use existing category', exact: true }).click();
+      await dialog
+        .getByRole('combobox', { name: 'Category', exact: true })
+        .selectOption('To delete');
+    }
+    await dialog.getByRole('button', { name: 'Save details', exact: true }).click();
+    await expect(dialog.locator('.edit-details')).toHaveCount(0);
+    await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^To delete/ })).toHaveCount(1);
+  }
+  await page.getByRole('button', { name: /^To delete/ }).click();
+  await expect(names).toHaveText(['alpha.png', 'photo2.png']);
+  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('alpha');
+  await expect(names).toHaveText(['alpha.png']);
+  await expect(page.getByRole('button', { name: 'Delete category', exact: true })).toBeInViewport({
+    ratio: 1,
+  });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/category-actions-mobile.png', fullPage: true });
+  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('"To delete" and all 2 images');
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(names).toHaveText(['alpha.png']);
+  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  const deletionRequest = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().endsWith('/api/catalog'),
+  );
+  await page.getByRole('button', { name: 'Permanently delete category', exact: true }).click();
+  expect((await deletionRequest).postDataJSON().deleteObjects).toHaveLength(6);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /^To delete/ })).toHaveCount(0);
+  await expect(page.getByRole('searchbox', { name: 'Search photographs' })).toHaveValue('');
+  await expect(names).toHaveText(['photo10.png']);
+  await page.reload();
+  await page.getByRole('button', { name: 'Sign in with passkey' }).click();
+  await page
+    .getByLabel('Vault passphrase', { exact: true })
+    .fill('a new passphrase for recovery testing');
+  await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
+  await expect(names).toHaveText(['photo10.png']);
+  await expect(page.getByRole('button', { name: /^To delete|^Private walks/ })).toHaveCount(0);
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
 });

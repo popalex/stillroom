@@ -153,6 +153,21 @@ h2 {
 .danger {
   color: var(--danger);
 }
+.primary.destructive {
+  background: var(--danger);
+  border-color: var(--danger);
+}
+.primary.destructive:hover {
+  background: #873434;
+  border-color: #873434;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
 .brand {
   display: flex;
   align-items: center;
@@ -404,13 +419,22 @@ h2 {
 }
 .collection-header h1 {
   margin: 14px 0 10px;
+  overflow-wrap: anywhere;
+}
+.collection-header > div:first-child {
+  min-width: 0;
 }
 .collection-header .eyebrow {
   color: var(--teal);
 }
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+}
+.header-actions .primary {
+  white-space: nowrap;
 }
 .mobile-lock,
 .mobile-devices {
@@ -726,6 +750,16 @@ dialog::backdrop {
   grid-column: 1 / -1;
   margin: 0;
   font-size: 12px;
+}
+.category-field {
+  display: grid;
+  gap: 8px;
+}
+.edit-details .details-error {
+  grid-column: 1 / -1;
+}
+.details-error:empty {
+  display: none;
 }
 .device-list {
   padding: 0;

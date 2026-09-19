@@ -21,7 +21,13 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Use Sort by to choose filename A to Z or Z to A, or date added newest or oldest first. Date added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
 
-   Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Preview zoom uses the generated preview; it does not fetch a full-resolution original automatically. Administrators can rename images and change their category through Edit details. Delete sits beside Edit details; the form also has a Permanently delete button. Confirm permanent deletion to delete the original, preview, and thumbnail from the live server. Empty categories can be created, but category rename/removal is not implemented yet.
+   Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Preview zoom uses the generated preview; it does not fetch a full-resolution original automatically.
+
+   Administrators can rename images and change their category through Edit details. Choose New category there to create a category and move the image into it with Save details.
+
+   Delete sits beside Edit details; the form also has a Permanently delete button. Confirm permanent deletion to delete the original, preview, and thumbnail from the live server.
+
+   When a category is selected, Delete category sits beside Upload images. Confirm to permanently delete the category and all its images, including images hidden by search. Other categories and uncategorized images are kept. Empty categories can also be deleted. Category renaming is not implemented yet.
 
    Locking or backgrounding the page discards the gallery state and signs out. Five minutes without interaction also locks it. No plaintext images or keys are intentionally stored in browser storage. Browser memory, device screenshots, source images on the upload PC, and downloaded originals remain outside any secure-erasure guarantee.
 
