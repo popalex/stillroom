@@ -385,6 +385,24 @@ describe('private API', () => {
       },
     };
   }
+  it('allows four simultaneous uploads and refuses a fifth', async () => {
+    const initial = vault();
+    await app.inject({ method: 'POST', url: '/api/vault', headers: headers(), payload: initial });
+    const send = (id: string) =>
+      app.inject({
+        method: 'PUT',
+        url: `/api/objects/${id}`,
+        headers: { ...headers(), 'content-type': 'application/octet-stream' },
+        payload: Buffer.alloc(2 * 1024 * 1024, 5),
+      });
+    const results = await Promise.all(
+      Array.from({ length: 5 }, () => send(randomUUID()).then((r) => r.statusCode)),
+    );
+    expect(results.filter((code) => code === 201).length).toBeGreaterThanOrEqual(4);
+    expect(results.filter((code) => code === 429).length).toBeLessThanOrEqual(1);
+    // and one more on its own still works
+    expect((await send(randomUUID())).statusCode).toBe(201);
+  });
   it('sweeps stale uploaded files when it starts', async () => {
     const store = openStore(dir);
     const orphan = randomUUID(),

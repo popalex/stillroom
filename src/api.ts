@@ -29,16 +29,29 @@ export async function api<T>(
   }
   return result.json() as Promise<T>;
 }
-export async function uploadObject(id: string, data: Uint8Array, signal: AbortSignal) {
-  const response = await fetch(`/api/objects/${id}`, {
-    method: 'PUT',
-    credentials: 'same-origin',
-    signal,
-    headers: { 'Content-Type': 'application/octet-stream', 'x-vault-request': '1' },
-    body: new Uint8Array(data),
-  });
-  if (!response.ok)
-    throw new ApiError(response.status, (await response.json()).error || 'Upload failed.');
+const RETRY_AFTER = [400, 800, 1600];
+export async function uploadObject(
+  id: string,
+  data: Uint8Array,
+  signal: AbortSignal,
+  wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
+) {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(`/api/objects/${id}`, {
+      method: 'PUT',
+      credentials: 'same-origin',
+      signal,
+      headers: { 'Content-Type': 'application/octet-stream', 'x-vault-request': '1' },
+      body: new Uint8Array(data),
+    });
+    if (response.ok) return;
+    const error = new ApiError(response.status, (await response.json()).error || 'Upload failed.');
+    // The server caps simultaneous uploads. Another tab, or a slow lane, can put
+    // us over it; waiting is the whole remedy.
+    if (error.status !== 429 || attempt >= RETRY_AFTER.length) throw error;
+    await wait(RETRY_AFTER[attempt]);
+    signal.throwIfAborted();
+  }
 }
 export async function fetchObject(id: string, signal: AbortSignal) {
   const response = await fetch(`/api/objects/${id}`, {

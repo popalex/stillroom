@@ -106,6 +106,9 @@ function categoryName(value: string, categories: string[]) {
 // images are slow to arrive.
 const COMMIT_EVERY = 10,
   COMMIT_AFTER = 20_000;
+// Three files at a time: the server allows four simultaneous object uploads, and
+// this keeps one browser tab below that while its renders and uploads overlap.
+const UPLOAD_LANES = 3;
 export function Gallery({
   initial,
   user,
@@ -252,9 +255,15 @@ export function Gallery({
     });
   const upload = (files: File[]) =>
     void task.run(async (signal) => {
+      const startedAt = Date.now();
       let next = catalog,
         waiting = 0,
-        committed = Date.now();
+        committed = startedAt,
+        claimed = 0,
+        finished = 0,
+        failed = false;
+      // What each lane is working on, for the progress line and the bar.
+      const running = new Map<number, { name: string; phase: string; share: number }>();
       // Every commit re-encrypts and re-uploads the whole catalog, which is about
       // a megabyte at a few hundred images, so a batch groups them. Whatever is
       // waiting when the batch ends or fails is still written, so no uploaded
@@ -265,34 +274,71 @@ export function Gallery({
         committed = Date.now();
         await save(next);
       };
-      try {
-        for (let index = 0; index < files.length; index++) {
-          const file = files[index];
-          const setPhase = (phase: string, done = 0) => {
-            setProgress(`${index + 1} / ${files.length} · ${phase} · ${file.name}`);
-            setShare((index + done) / files.length);
-          };
-          setPhase('Preparing');
-          const image = await importImage(
-            file,
-            category === 'all' || category === 'uncategorized' ? '' : category,
-            initial.vault,
-            signal,
-            setPhase,
-          );
-          signal.throwIfAborted();
-          next = { ...next, images: [image, ...next.images] };
-          waiting++;
-          if (waiting >= COMMIT_EVERY || Date.now() - committed > COMMIT_AFTER) {
-            setPhase('Saving to collection', 0.98);
-            await commit();
+      let commits: Promise<void> = Promise.resolve();
+      const queueCommit = () => (commits = commits.then(commit));
+      const report = () => {
+        const lanes = [...running.values()];
+        setProgress(
+          files.length === 1
+            ? `1 / 1 · ${lanes[0]?.phase ?? 'Saving to collection'} · ${files[0].name}`
+            : `${finished} / ${files.length} · ${
+                lanes.length
+                  ? `uploading ${lanes.map((lane) => lane.name).join(', ')}`
+                  : 'saving to collection'
+              }`,
+        );
+        let share = finished;
+        for (const lane of lanes) share += lane.share;
+        setShare(share / files.length);
+      };
+      const lane = async () => {
+        try {
+          while (claimed < files.length && !failed) {
+            const index = claimed++,
+              file = files[index];
+            running.set(index, { name: file.name, phase: 'Preparing', share: 0 });
+            report();
+            const imported = await importImage(
+              file,
+              category === 'all' || category === 'uncategorized' ? '' : category,
+              initial.vault,
+              signal,
+              (phase, share) => {
+                running.set(index, { name: file.name, phase, share });
+                report();
+              },
+            );
+            signal.throwIfAborted();
+            // Lanes finish out of order and can share a millisecond, so date
+            // sorting would shuffle a batch. Stamp them in the order they were
+            // chosen instead, which is what the gallery shows.
+            const image = { ...imported, added: new Date(startedAt + index).toISOString() };
+            running.delete(index);
+            finished++;
+            next = { ...next, images: [image, ...next.images] };
+            waiting++;
+            report();
+            if (waiting >= COMMIT_EVERY || Date.now() - committed > COMMIT_AFTER)
+              await queueCommit();
           }
+        } catch (error) {
+          // stop the other lanes before the flush below, so nothing uploads
+          // into a catalog that has already been written
+          failed = true;
+          throw error;
         }
-        setProgress(`Saving ${files.length === 1 ? '' : 'the last images '}to collection`);
-        await commit();
+      };
+      try {
+        const lanes = await Promise.allSettled(
+          Array.from({ length: Math.min(UPLOAD_LANES, files.length) }, lane),
+        );
+        const stopped = lanes.find((result) => result.status === 'rejected');
+        if (stopped) throw stopped.reason;
+        report();
+        await queueCommit();
       } finally {
         if (!signal.aborted) {
-          await commit().catch(() => {});
+          await queueCommit().catch(() => {});
           setProgress('');
           setShare(0);
         }

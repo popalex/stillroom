@@ -17,7 +17,7 @@ The first implementation includes passkey enrollment and login, device permissio
 
 2. Upload and browse.
 
-   Add a category, then choose images or drag them onto the gallery. JPEG, PNG, and non-animated WebP are supported, up to 25 MiB and 40 megapixels per original. Uploads run sequentially. A batch commits the catalog every ten images rather than after each one, since every commit re-uploads the whole encrypted catalog; the images appear in the gallery in those groups. A failure commits whatever finished first, so earlier images survive it. Retry a failed file by selecting it again. This version does not resume partial file uploads.
+   Add a category, then choose images or drag them onto the gallery. JPEG, PNG, and non-animated WebP are supported, up to 25 MiB and 40 megapixels per original. A batch uploads three images at once, which overlaps the browser's rendering with the network and matters most on a link with real latency. The server accepts four simultaneous uploads and answers a fifth with 429; the browser waits and retries rather than failing the batch. A batch commits the catalog every ten images rather than after each one, since every commit re-uploads the whole encrypted catalog; the images appear in the gallery in those groups. A failure commits whatever finished first, so earlier images survive it. Retry a failed file by selecting it again. This version does not resume partial file uploads.
 
    A line under the upload strip fills as the batch runs, weighted by the bytes each step moves, and the text names the file and the phase it is in. The same strip and line report a thumbnail rebuild.
 

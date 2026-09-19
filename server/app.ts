@@ -587,7 +587,7 @@ export async function buildApp(config: Config) {
     const id = idSchema.parse((req.params as { id: string }).id);
     if (req.headers['content-type'] !== 'application/octet-stream')
       fail(415, 'Expected encrypted binary data.');
-    if (activeUploads >= 2) fail(429, 'Wait for the current uploads to finish.');
+    if (activeUploads >= 4) fail(429, 'Wait for the current uploads to finish.');
     const temporary = join(config.dataDir, 'tmp', token());
     const destination = join(config.dataDir, 'objects', id);
     let bytes = 0;
