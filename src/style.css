@@ -670,9 +670,13 @@ dialog::backdrop {
 .viewer-dialog {
   width: calc(100vw - 60px);
   max-width: 1500px;
-  padding: 20px;
+  padding: 12px;
+  max-height: calc(100dvh - 16px);
   overscroll-behavior-y: contain;
-  scroll-padding-block: 20px;
+  scroll-padding-block: 12px;
+}
+.viewer-dialog .dialog-heading {
+  margin-bottom: 10px;
 }
 .viewer-dialog .dialog-heading h2 {
   font-size: 16px;
@@ -680,7 +684,7 @@ dialog::backdrop {
 }
 .viewer-image {
   position: relative;
-  height: min(68dvh, 850px);
+  height: min(78dvh, 1100px);
   background: var(--navy);
   display: flex;
   align-items: center;
@@ -722,8 +726,8 @@ dialog::backdrop {
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
-  gap: 16px;
-  padding-top: 16px;
+  gap: 10px;
+  padding-top: 10px;
   font-size: 12px;
 }
 .viewer-toolbar > div {
@@ -938,10 +942,10 @@ dialog::backdrop {
   }
   .viewer-dialog {
     width: calc(100vw - 16px);
-    padding: 12px;
+    padding: 10px;
   }
   .viewer-image {
-    height: 55dvh;
+    height: 68dvh;
   }
   .viewer-toolbar > span {
     width: 100%;
