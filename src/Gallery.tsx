@@ -102,6 +102,10 @@ function categoryName(value: string, categories: string[]) {
   return name;
 }
 
+// A batch commits the catalog every so many images, or every so often when the
+// images are slow to arrive.
+const COMMIT_EVERY = 10,
+  COMMIT_AFTER = 20_000;
 export function Gallery({
   initial,
   user,
@@ -248,7 +252,19 @@ export function Gallery({
     });
   const upload = (files: File[]) =>
     void task.run(async (signal) => {
-      let next = catalog;
+      let next = catalog,
+        waiting = 0,
+        committed = Date.now();
+      // Every commit re-encrypts and re-uploads the whole catalog, which is about
+      // a megabyte at a few hundred images, so a batch groups them. Whatever is
+      // waiting when the batch ends or fails is still written, so no uploaded
+      // file is left with nothing pointing at it.
+      const commit = async () => {
+        if (!waiting) return;
+        waiting = 0;
+        committed = Date.now();
+        await save(next);
+      };
       try {
         for (let index = 0; index < files.length; index++) {
           const file = files[index];
@@ -265,12 +281,18 @@ export function Gallery({
             setPhase,
           );
           signal.throwIfAborted();
-          setPhase('Saving to collection', 0.95);
           next = { ...next, images: [image, ...next.images] };
-          await save(next);
+          waiting++;
+          if (waiting >= COMMIT_EVERY || Date.now() - committed > COMMIT_AFTER) {
+            setPhase('Saving to collection', 0.98);
+            await commit();
+          }
         }
+        setProgress(`Saving ${files.length === 1 ? '' : 'the last images '}to collection`);
+        await commit();
       } finally {
         if (!signal.aborted) {
+          await commit().catch(() => {});
           setProgress('');
           setShare(0);
         }
