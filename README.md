@@ -27,6 +27,8 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Each upload stores three encrypted files: the original, a 2048px preview, and a 640px thumbnail for the grid. Images uploaded before thumbnails grew to 640px still have 320px ones, and the gallery offers Rebuild thumbnails while any remain. That runs in the browser: it decrypts each preview, renders a new thumbnail, uploads it, and deletes the file it replaced. Leave the tab open until it finishes, and run it from the upload PC, since viewing devices cannot write to the collection.
 
+   Delete category removes a category and every image in it. On Uncategorized the same button reads Delete uncategorized and removes every image without a category, leaving the categories alone. Both include images hidden by the current search.
+
    Delete sits beside Edit details; the form also has a Permanently delete button. Confirm permanent deletion to delete the original, preview, and thumbnail from the live server.
 
    When a category is selected, Delete category sits beside Upload images. Confirm to permanently delete the category and all its images, including images hidden by search. Other categories and uncategorized images are kept. Empty categories can also be deleted. Category renaming is not implemented yet.

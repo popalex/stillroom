@@ -173,7 +173,12 @@ export function Gallery({
     [catalog, category, search, sortOrder],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
-  const categoryImages = catalog.images.filter((image) => image.category === deletingCategory);
+  // The deletion dialog doubles as the one for uncategorized images, which is not
+  // a category and so cannot collide with a real name.
+  const deletingLoose = deletingCategory === 'uncategorized';
+  const categoryImages = catalog.images.filter((image) =>
+    deletingLoose ? !image.category : image.category === deletingCategory,
+  );
   const save = async (next: Catalog, deleteObjects?: string[]) => {
     const encrypted = await encryptCatalog(initial.vault, next);
     task.signal.throwIfAborted();
@@ -377,18 +382,21 @@ export function Gallery({
             >
               <Icon name="lock" />
             </button>
-            {admin && catalog.categories.includes(category) && (
-              <button
-                className="primary destructive"
-                disabled={task.busy}
-                onClick={() => {
-                  task.setError('');
-                  setDeletingCategory(category);
-                }}
-              >
-                Delete category
-              </button>
-            )}
+            {admin &&
+              (catalog.categories.includes(category) ||
+                (category === 'uncategorized' &&
+                  catalog.images.some((image) => !image.category))) && (
+                <button
+                  className="primary destructive"
+                  disabled={task.busy}
+                  onClick={() => {
+                    task.setError('');
+                    setDeletingCategory(category);
+                  }}
+                >
+                  {category === 'uncategorized' ? 'Delete uncategorized' : 'Delete category'}
+                </button>
+              )}
             {admin && (
               <button
                 className="primary"
@@ -531,10 +539,22 @@ export function Gallery({
         )}
       </main>
       {deletingCategory !== null && (
-        <Dialog title="Delete category" onClose={() => !task.busy && setDeletingCategory(null)}>
+        <Dialog
+          title={deletingLoose ? 'Delete uncategorized images' : 'Delete category'}
+          onClose={() => !task.busy && setDeletingCategory(null)}
+        >
           <p>
-            Permanently delete "{deletingCategory}" and all {categoryImages.length}{' '}
-            {categoryImages.length === 1 ? 'image' : 'images'} in it?
+            {deletingLoose ? (
+              <>
+                Permanently delete all {categoryImages.length} uncategorized{' '}
+                {categoryImages.length === 1 ? 'image' : 'images'}?
+              </>
+            ) : (
+              <>
+                Permanently delete "{deletingCategory}" and all {categoryImages.length}{' '}
+                {categoryImages.length === 1 ? 'image' : 'images'} in it?
+              </>
+            )}
           </p>
           <p className="muted">
             This includes images hidden by search. Originals, previews, and thumbnails will be
@@ -559,8 +579,12 @@ export function Gallery({
                   await save(
                     {
                       ...catalog,
-                      categories: catalog.categories.filter((name) => name !== deletingCategory),
-                      images: catalog.images.filter((image) => image.category !== deletingCategory),
+                      categories: deletingLoose
+                        ? catalog.categories
+                        : catalog.categories.filter((name) => name !== deletingCategory),
+                      images: catalog.images.filter((image) =>
+                        deletingLoose ? image.category : image.category !== deletingCategory,
+                      ),
                     },
                     objects.length ? objects : undefined,
                   );
@@ -571,7 +595,11 @@ export function Gallery({
                 })
               }
             >
-              {task.busy ? 'Deleting…' : 'Permanently delete category'}
+              {task.busy
+                ? 'Deleting…'
+                : deletingLoose
+                  ? 'Permanently delete images'
+                  : 'Permanently delete category'}
             </button>
           </div>
         </Dialog>
