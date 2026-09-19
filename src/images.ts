@@ -81,8 +81,13 @@ export async function importImage(
   category: string,
   vault: VaultKey,
   signal: AbortSignal,
-  progress: (text: string) => void,
+  // `done` is this file's share of the work, 0 to 1, weighted by the bytes each
+  // step moves so the caller can draw a bar that tracks the wait.
+  progress: (text: string, done: number) => void,
 ): Promise<ImageEntry> {
+  // The caller still has to commit the catalog once this returns, so the steps
+  // here stop short of 1 and never tick backwards when that last phase reports.
+  const report = (text: string, done: number) => progress(text, done * 0.9);
   if (file.size > 25 * 1024 * 1024 || file.size === 0)
     throw new Error('Each image must be between 1 byte and 25 MiB.');
   if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type))
@@ -95,20 +100,30 @@ export async function importImage(
     height = bitmap.height;
   try {
     checkDimensions(width, height);
+    // Rendering is the slow half for a large photograph, so it reports its own
+    // steps instead of leaving the bar still until the uploads start.
+    report('Rendering thumbnail', 0.05);
     thumbnail = await renderPreview(bitmap, THUMBNAIL_EDGE);
+    report('Rendering preview', 0.15);
     preview = await renderPreview(bitmap, PREVIEW_EDGE);
     const refs: Partial<Record<'original' | 'thumbnail' | 'preview', ImageEntry['original']>> = {};
+    // Rendering is behind us and counts for a third, so the byte-weighted steps
+    // that follow carry on from there.
+    const total = 3 * original.length + 2 * (thumbnail.length + preview.length);
+    let moved = original.length;
     for (const [purpose, bytes] of [
       ['original', original],
       ['thumbnail', thumbnail],
       ['preview', preview],
     ] as const) {
       signal.throwIfAborted();
-      progress(`Encrypting ${purpose}`);
+      report(`Encrypting ${purpose}`, moved / total);
       const encrypted = await encryptObject(vault, purpose, bytes);
+      moved += bytes.length;
       signal.throwIfAborted();
-      progress(`Uploading ${purpose}`);
+      report(`Uploading ${purpose}`, moved / total);
       await uploadObject(encrypted.ref.id, encrypted.data, signal);
+      moved += bytes.length;
       refs[purpose] = encrypted.ref;
       encrypted.data.fill(0);
     }

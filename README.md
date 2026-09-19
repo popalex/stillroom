@@ -19,6 +19,8 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Add a category, then choose images or drag them onto the gallery. JPEG, PNG, and non-animated WebP are supported, up to 25 MiB and 40 megapixels per original. Uploads run sequentially. Each completed image gets its own catalog commit, so earlier images survive a later failure. Retry a failed file by selecting it again. This version does not resume partial file uploads.
 
+   A line under the upload strip fills as the batch runs, weighted by the bytes each step moves, and the text names the file and the phase it is in. The same strip and line report a thumbnail rebuild.
+
    Use Sort by to choose filename A to Z or Z to A, or date added newest or oldest first. Date added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
 
    Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Zoom with the scroll wheel, a pinch, a double click or double tap, the `+` and `-` keys, or the toolbar buttons, and drag to move around a zoomed image. Press `0` or the percentage button to fit the image to the window again. Zooming uses the generated preview; it does not fetch a full-resolution original automatically.

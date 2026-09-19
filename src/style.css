@@ -601,6 +601,7 @@ h2 {
   letter-spacing: 0.04em;
 }
 .upload-progress {
+  position: relative;
   padding: 14px;
   background: var(--wash);
   margin-bottom: 20px;
@@ -609,6 +610,18 @@ h2 {
   gap: 12px;
   font-size: 12px;
   overflow-wrap: anywhere;
+}
+.progress-track {
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--line);
+}
+.progress-track > span {
+  display: block;
+  height: 100%;
+  background: var(--teal);
+  transition: width 0.3s ease-out;
 }
 .upload-progress button {
   margin-left: auto;

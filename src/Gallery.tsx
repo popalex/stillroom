@@ -121,6 +121,7 @@ export function Gallery({
   const [deletingCategory, setDeletingCategory] = useState<string | null>(null);
   const [devices, setDevices] = useState(false),
     [progress, setProgress] = useState(''),
+    [share, setShare] = useState(0),
     [dragging, setDragging] = useState(false);
   const task = useTask(),
     fileInput = useRef<HTMLInputElement>(null);
@@ -208,6 +209,7 @@ export function Gallery({
         for (let index = 0; index < soft.length; index++) {
           const image = soft[index];
           setProgress(`${index + 1} / ${soft.length} · Rebuilding thumbnail · ${image.name}`);
+          setShare(index / soft.length);
           const preview = await decryptObject(
             initial.vault,
             image.preview,
@@ -235,9 +237,13 @@ export function Gallery({
             ),
           };
           await save(next, [replaced]);
+          setShare((index + 1) / soft.length);
         }
       } finally {
-        if (!signal.aborted) setProgress('');
+        if (!signal.aborted) {
+          setProgress('');
+          setShare(0);
+        }
       }
     });
   const upload = (files: File[]) =>
@@ -246,8 +252,10 @@ export function Gallery({
       try {
         for (let index = 0; index < files.length; index++) {
           const file = files[index];
-          const setPhase = (phase: string) =>
+          const setPhase = (phase: string, done = 0) => {
             setProgress(`${index + 1} / ${files.length} · ${phase} · ${file.name}`);
+            setShare((index + done) / files.length);
+          };
           setPhase('Preparing');
           const image = await importImage(
             file,
@@ -257,12 +265,15 @@ export function Gallery({
             setPhase,
           );
           signal.throwIfAborted();
-          setPhase('Saving to collection');
+          setPhase('Saving to collection', 0.95);
           next = { ...next, images: [image, ...next.images] };
           await save(next);
         }
       } finally {
-        if (!signal.aborted) setProgress('');
+        if (!signal.aborted) {
+          setProgress('');
+          setShare(0);
+        }
         if (fileInput.current) fileInput.current.value = '';
       }
     });
@@ -469,9 +480,17 @@ export function Gallery({
           </div>
         )}
         {progress && (
-          <div className="upload-progress" role="status">
+          <div className="upload-progress">
             <span className="spinner" />
-            {progress}
+            <span role="status">{progress}</span>
+            <span
+              className="progress-track"
+              role="progressbar"
+              aria-label="Progress"
+              aria-valuenow={Math.round(share * 100)}
+            >
+              <span style={{ width: `${Math.min(100, Math.round(share * 100))}%` }} />
+            </span>
           </div>
         )}
         {images.length ? (
