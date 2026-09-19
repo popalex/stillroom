@@ -368,6 +368,7 @@ describe('private API', () => {
     });
     return {
       ids,
+      initial,
       payload: {
         revision: 2,
         catalog: initial.catalog,
@@ -376,6 +377,47 @@ describe('private API', () => {
       },
     };
   }
+  it('swaps a rebuilt thumbnail in and deletes only the file it replaced', async () => {
+    const { ids, initial } = await imageForDeletion(3, 0);
+    const replacement = randomUUID();
+    expect(
+      (
+        await app.inject({
+          method: 'PUT',
+          url: `/api/objects/${replacement}`,
+          headers: { ...headers(), 'content-type': 'application/octet-stream' },
+          payload: Buffer.alloc(64, 9),
+        })
+      ).statusCode,
+    ).toBe(201);
+    const swap = {
+      method: 'PUT' as const,
+      url: '/api/catalog',
+      headers: headers(),
+      payload: {
+        revision: 2,
+        catalog: initial.catalog,
+        objects: [ids[0], replacement, ids[2]],
+        deleteObjects: [ids[1]],
+      },
+    };
+    // the replaced file is still in use here, so this one must be refused
+    expect(
+      (
+        await app.inject({
+          ...swap,
+          payload: { ...swap.payload, objects: ids, deleteObjects: [ids[1]] },
+        })
+      ).statusCode,
+    ).toBe(400);
+    const done = await app.inject(swap);
+    expect(done.statusCode).toBe(200);
+    expect(done.json()).toEqual({ revision: 3, pending: 0 });
+    expect(readdirSync(join(dir, 'objects')).sort()).toEqual([ids[0], replacement, ids[2]].sort());
+    expect(
+      (await app.inject({ url: `/api/objects/${ids[1]}`, headers: headers() })).statusCode,
+    ).toBe(404);
+  });
   it('deletes multiple images together and rejects incomplete or duplicate deletion lists', async () => {
     const { ids, payload } = await imageForDeletion(9, 6);
     const request = { method: 'PUT' as const, url: '/api/catalog', headers: headers(), payload };

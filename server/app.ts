@@ -503,7 +503,7 @@ export async function buildApp(config: Config) {
         revision: z.number().int().positive(),
         catalog: packetSchema,
         objects: z.array(idSchema).max(30_000),
-        deleteObjects: z.array(idSchema).min(3).max(30_000).optional(),
+        deleteObjects: z.array(idSchema).min(1).max(30_000).optional(),
       })
       .parse(req.body);
     const commit = db.transaction(() => {
@@ -525,18 +525,17 @@ export async function buildApp(config: Config) {
         const current = (
           db.prepare('SELECT id FROM current_objects').all() as { id: string }[]
         ).map((o) => o.id);
-        const currentSet = new Set(current);
         const next = new Set(input.objects);
+        // Only files this commit drops from the collection may be queued, so a
+        // deletion can never reach a file the new catalog still points at.
         const removed = current.filter((id) => !next.has(id));
         const deleted = new Set(input.deleteObjects);
         if (
           deleted.size !== input.deleteObjects.length ||
-          deleted.size % 3 !== 0 ||
           removed.length !== deleted.size ||
-          removed.some((id) => !deleted.has(id)) ||
-          input.objects.some((id) => !currentSet.has(id))
+          removed.some((id) => !deleted.has(id))
         )
-          fail(400, 'Deletion must remove exactly the selected image files.');
+          fail(400, 'Deletion must remove exactly the files the collection no longer uses.');
         const queue = db.prepare('INSERT INTO pending_deletions VALUES (?)');
         for (const id of deleted) queue.run(id);
       }
