@@ -660,7 +660,8 @@ export function Gallery({
           image={images[selectedIndex]}
           vault={initial.vault}
           categories={catalog.categories}
-          admin={admin && !task.busy}
+          admin={admin}
+          busy={task.busy}
           position={`${selectedIndex + 1} / ${images.length}`}
           onClose={() => setSelected(null)}
           previous={selectedIndex > 0 ? () => setSelected(images[selectedIndex - 1].id) : undefined}
@@ -846,6 +847,7 @@ function Viewer({
   vault,
   categories,
   admin,
+  busy,
   position,
   onClose,
   previous,
@@ -857,6 +859,7 @@ function Viewer({
   vault: VaultKey;
   categories: string[];
   admin: boolean;
+  busy: boolean;
   position: string;
   onClose: () => void;
   previous?: () => void;
@@ -990,6 +993,7 @@ function Viewer({
             <span className="image-admin-actions">
               <button
                 aria-expanded={editing}
+                disabled={busy}
                 aria-controls="image-details"
                 onClick={() => setEditing(!editing)}
               >
@@ -997,7 +1001,7 @@ function Viewer({
               </button>
               <button
                 className="danger"
-                disabled={task.busy}
+                disabled={busy || task.busy}
                 onClick={() => {
                   setEditing(true);
                   setConfirmDelete(true);
@@ -1074,13 +1078,13 @@ function Viewer({
               {creatingCategory ? 'Use existing category' : 'New category'}
             </button>
           </div>
-          <button className="primary" disabled={task.busy}>
+          <button className="primary" disabled={busy || task.busy}>
             Save details
           </button>
           <button
             type="button"
             className="danger"
-            disabled={task.busy}
+            disabled={busy || task.busy}
             onClick={() => (confirmDelete ? void task.run(remove) : setConfirmDelete(true))}
           >
             {confirmDelete ? 'Confirm permanent deletion' : 'Permanently delete'}
