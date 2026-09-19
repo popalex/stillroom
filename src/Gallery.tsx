@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   sortOrderSchema,
   type Catalog,
@@ -588,6 +595,154 @@ export function Gallery({
     </div>
   );
 }
+const MAX_ZOOM = 8;
+type View = { scale: number; x: number; y: number };
+const FIT: View = { scale: 1, x: 0, y: 0 };
+// Pointer-driven zoom: wheel and pinch zoom around the cursor, drag pans, double
+// click toggles. `x` and `y` are the image's offset from the centre of the frame.
+function useZoom(imageID: string, swipe: (direction: -1 | 1) => void) {
+  const frame = useRef<HTMLDivElement>(null),
+    picture = useRef<HTMLImageElement>(null);
+  const [view, setView] = useState(FIT),
+    [smooth, setSmooth] = useState(false),
+    [panning, setPanning] = useState(false);
+  const pointers = useRef(new Map<number, { x: number; y: number }>()),
+    spread = useRef(0),
+    gesture = useRef({ x: 0, at: 0, moved: false, tapped: 0, toggled: 0 });
+  const hold = (next: View): View => {
+    const scale = Math.min(Math.max(next.scale, 1), MAX_ZOOM),
+      box = frame.current,
+      img = picture.current;
+    if (!box || !img || scale === 1) return { scale, x: 0, y: 0 };
+    const roomX = Math.max(0, (img.clientWidth * scale - box.clientWidth) / 2),
+      roomY = Math.max(0, (img.clientHeight * scale - box.clientHeight) / 2);
+    return {
+      scale,
+      x: Math.min(Math.max(next.x, -roomX), roomX),
+      y: Math.min(Math.max(next.y, -roomY), roomY),
+    };
+  };
+  const zoom = (
+    target: number | ((scale: number) => number),
+    at: { x: number; y: number } = { x: 0, y: 0 },
+    animate = false,
+  ) => {
+    setSmooth(animate);
+    setView((current) => {
+      const wanted = typeof target === 'function' ? target(current.scale) : target,
+        scale = Math.min(Math.max(wanted, 1), MAX_ZOOM),
+        ratio = scale / current.scale;
+      return hold({
+        scale,
+        x: at.x - ratio * (at.x - current.x),
+        y: at.y - ratio * (at.y - current.y),
+      });
+    });
+  };
+  const pointAt = (point: { clientX: number; clientY: number }) => {
+    const box = frame.current!.getBoundingClientRect();
+    return {
+      x: point.clientX - box.left - box.width / 2,
+      y: point.clientY - box.top - box.height / 2,
+    };
+  };
+  const toggle = (at: { x: number; y: number }) =>
+    view.scale > 1 ? zoom(1, at, true) : zoom(2.5, at, true);
+  const middle = () => {
+    const [a, b] = [...pointers.current.values()];
+    const box = frame.current!.getBoundingClientRect();
+    return {
+      x: (a.x + b.x) / 2 - box.left - box.width / 2,
+      y: (a.y + b.y) / 2 - box.top - box.height / 2,
+      apart: Math.hypot(a.x - b.x, a.y - b.y),
+    };
+  };
+  useEffect(() => {
+    setSmooth(false);
+    setView(FIT);
+  }, [imageID]);
+  useEffect(() => {
+    const box = frame.current;
+    if (!box) return;
+    // A rotated phone or a resized window changes how much room the image has to pan.
+    const observer = new ResizeObserver(() => setView((current) => hold(current)));
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
+  useEffect(() => {
+    const box = frame.current;
+    if (!box) return;
+    // React listens for wheel passively, so preventDefault needs our own listener.
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      zoom((scale) => scale * Math.exp(-event.deltaY * 0.002), pointAt(event));
+    };
+    box.addEventListener('wheel', wheel, { passive: false });
+    return () => box.removeEventListener('wheel', wheel);
+  }, []);
+  const handlers = {
+    onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0 && event.pointerType === 'mouse') return;
+      if ((event.target as HTMLElement).closest('button')) return;
+      pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (pointers.current.size === 2) spread.current = middle().apart;
+      if (pointers.current.size !== 1) return;
+      gesture.current = { ...gesture.current, x: event.clientX, at: Date.now(), moved: false };
+      if (view.scale > 1) {
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setPanning(true);
+      }
+    },
+    onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => {
+      const last = pointers.current.get(event.pointerId);
+      if (!last) return;
+      const moved = { x: event.clientX - last.x, y: event.clientY - last.y };
+      pointers.current.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (Math.abs(moved.x) > 2 || Math.abs(moved.y) > 2) gesture.current.moved = true;
+      if (pointers.current.size === 2) {
+        const { x, y, apart } = middle(),
+          factor = spread.current > 0 ? apart / spread.current : 1;
+        spread.current = apart;
+        if (factor !== 1) zoom((scale) => scale * factor, { x, y });
+        return;
+      }
+      if (pointers.current.size === 1 && view.scale > 1) {
+        setSmooth(false);
+        setView((current) => hold({ ...current, x: current.x + moved.x, y: current.y + moved.y }));
+      }
+    },
+    onPointerUp: (event: ReactPointerEvent<HTMLDivElement>) => {
+      const start = pointers.current.get(event.pointerId);
+      const alone = pointers.current.size === 1;
+      pointers.current.delete(event.pointerId);
+      if (pointers.current.size < 2) spread.current = 0;
+      setPanning(false);
+      if (!start || !alone || event.pointerType === 'mouse') return;
+      const { x, at, moved, tapped } = gesture.current,
+        travelled = event.clientX - x;
+      if (view.scale === 1 && moved && Math.abs(travelled) > 70)
+        return swipe(travelled > 0 ? -1 : 1);
+      if (moved) return;
+      const now = Date.now();
+      gesture.current.tapped = now;
+      if (now - tapped < 320 && now - at < 320) {
+        gesture.current.toggled = now;
+        toggle(pointAt(event));
+      }
+    },
+    onPointerCancel: (event: ReactPointerEvent<HTMLDivElement>) => {
+      pointers.current.delete(event.pointerId);
+      if (pointers.current.size < 2) spread.current = 0;
+      setPanning(false);
+    },
+    // A double tap also reaches us as a synthesised dblclick, which would undo the toggle.
+    onDoubleClick: (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (Date.now() - gesture.current.toggled < 400) return;
+      toggle(pointAt(event));
+    },
+  };
+  return { frame, picture, view, smooth, panning, zoom, handlers };
+}
 function Viewer({
   image,
   vault,
@@ -612,15 +767,17 @@ function Viewer({
   remove: () => Promise<void>;
 }) {
   const { url, error } = useImage(image.preview, vault);
-  const [zoom, setZoom] = useState(false),
-    [editing, setEditing] = useState(false),
+  const { frame, picture, view, smooth, panning, zoom, handlers } = useZoom(
+    image.id,
+    (direction) => (direction < 0 ? previous?.() : next?.()),
+  );
+  const [editing, setEditing] = useState(false),
     [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState(image.name),
     [category, setCategory] = useState(image.category);
   const [creatingCategory, setCreatingCategory] = useState(false),
     [newCategory, setNewCategory] = useState('');
-  const startX = useRef(0),
-    task = useTask();
+  const task = useTask();
   const detailsRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
     if (!editing) return;
@@ -632,26 +789,31 @@ function Viewer({
       if (['INPUT', 'SELECT', 'TEXTAREA'].includes((event.target as HTMLElement).tagName)) return;
       if (event.key === 'ArrowRight') next?.();
       if (event.key === 'ArrowLeft') previous?.();
+      if (event.key === '+' || event.key === '=')
+        zoom((scale) => scale * 1.5, { x: 0, y: 0 }, true);
+      if (event.key === '-') zoom((scale) => scale / 1.5, { x: 0, y: 0 }, true);
+      if (event.key === '0') zoom(1, { x: 0, y: 0 }, true);
     };
     window.addEventListener('keydown', handle);
     return () => window.removeEventListener('keydown', handle);
-  }, [previous, next]);
+  }, [previous, next, zoom]);
   return (
     <Dialog title={image.name} onClose={onClose} className="viewer-dialog">
       <div
-        className={`viewer-image ${zoom ? 'zoomed' : ''}`}
-        onTouchStart={(e) => {
-          startX.current = e.touches[0].clientX;
-        }}
-        onTouchEnd={(e) => {
-          if (zoom) return;
-          const delta = e.changedTouches[0].clientX - startX.current;
-          if (delta > 70) previous?.();
-          else if (delta < -70) next?.();
-        }}
+        ref={frame}
+        className={`viewer-image${view.scale > 1 ? ' zoomed' : ''}${panning ? ' panning' : ''}${
+          smooth ? ' smooth' : ''
+        }`}
+        {...handlers}
       >
         {url ? (
-          <img src={url} alt={image.name} onDoubleClick={() => setZoom(!zoom)} />
+          <img
+            ref={picture}
+            src={url}
+            alt={image.name}
+            draggable={false}
+            style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
+          />
         ) : (
           <p role="status">{error || 'Opening image…'}</p>
         )}
@@ -680,7 +842,32 @@ function Viewer({
           </span>
         </span>
         <div>
-          <button onClick={() => setZoom(!zoom)}>{zoom ? 'Fit image' : 'Zoom preview'}</button>
+          <span className="zoom-controls">
+            <button
+              className="icon-button"
+              aria-label="Zoom out"
+              disabled={view.scale === 1}
+              onClick={() => zoom((scale) => scale / 1.5, { x: 0, y: 0 }, true)}
+            >
+              <Icon name="out" size={18} />
+            </button>
+            <button
+              className="zoom-level text-button"
+              aria-label="Fit image to the window"
+              disabled={view.scale === 1}
+              onClick={() => zoom(1, { x: 0, y: 0 }, true)}
+            >
+              {view.scale === 1 ? 'Fit' : `${Math.round(view.scale * 100)}%`}
+            </button>
+            <button
+              className="icon-button"
+              aria-label="Zoom in"
+              disabled={view.scale === MAX_ZOOM}
+              onClick={() => zoom((scale) => scale * 1.5, { x: 0, y: 0 }, true)}
+            >
+              <Icon name="in" size={18} />
+            </button>
+          </span>
           <button
             disabled={task.busy}
             onClick={() =>

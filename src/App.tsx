@@ -23,7 +23,7 @@ export function Icon({
   name,
   size = 20,
 }: {
-  name: 'lock' | 'plus' | 'grid' | 'close' | 'arrow' | 'download' | 'devices';
+  name: 'lock' | 'plus' | 'grid' | 'close' | 'arrow' | 'download' | 'devices' | 'in' | 'out';
   size?: number;
 }) {
   const paths = {
@@ -43,6 +43,18 @@ export function Icon({
       </>
     ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
+    in: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4.4-4.4M11 8v6M8 11h6" />
+      </>
+    ),
+    out: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4.4-4.4M8 11h6" />
+      </>
+    ),
     arrow: <path d="m9 5 7 7-7 7" />,
     download: <path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5" />,
     devices: (

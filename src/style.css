@@ -689,21 +689,26 @@ dialog::backdrop {
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: auto;
+  overflow: hidden;
+  touch-action: none;
   color: var(--white);
 }
 .viewer-image img {
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
-}
-.viewer-image.zoomed {
-  display: block;
+  cursor: zoom-in;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 .viewer-image.zoomed img {
-  max-width: none;
-  max-height: none;
-  min-width: 100%;
+  cursor: grab;
+}
+.viewer-image.panning img {
+  cursor: grabbing;
+}
+.viewer-image.smooth img {
+  transition: transform 0.18s ease-out;
 }
 .viewer-prev,
 .viewer-next {
@@ -738,6 +743,29 @@ dialog::backdrop {
 .viewer-toolbar button {
   padding: 7px 10px;
   font-size: 12px;
+}
+.zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.zoom-controls .icon-button {
+  padding: 6px;
+  border-color: var(--line);
+  background: var(--white);
+}
+.zoom-level {
+  padding: 6px 4px;
+  min-width: 52px;
+  font-family: var(--utility);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  margin: 0;
+}
+.zoom-level:disabled {
+  color: var(--muted);
+  opacity: 1;
 }
 .image-admin-actions {
   display: inline-flex;
