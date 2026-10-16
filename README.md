@@ -135,3 +135,7 @@ The first implementation includes passkey enrollment and login, device permissio
    Unit tests cover access boundaries, session revocation, catalog conflicts, ciphertext authentication, key recovery, and KDF bounds. The browser test uses virtual authenticators with Chromium, uploads an image, opens it from a separate mobile-sized browser context, downloads the original, and recovers the vault. It does not replace testing your actual PC, phone, passkey provider, or Tailscale deployment.
 
 The server delivers the website's JavaScript. A compromised server could modify that code to capture keys during a future unlock. Browser encryption protects stored content, but it cannot remove this trust in the website host. The architecture and its limits are recorded in [PLAN.md](PLAN.md) and [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md).
+
+## License
+
+[MIT](LICENSE)

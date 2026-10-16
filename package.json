@@ -2,6 +2,7 @@
   "name": "secure-image-viewer",
   "version": "0.1.0",
   "description": "A private image gallery with browser-side encryption",
+  "license": "MIT",
   "scripts": {
     "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
     "dev:server": "tsx watch server/index.ts",
