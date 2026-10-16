@@ -1,5 +1,5 @@
 {
-  "name": "secure-image-viewer",
+  "name": "stillroom",
   "version": "0.1.0",
   "description": "A private image gallery with browser-side encryption",
   "license": "MIT",
