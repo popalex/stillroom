@@ -19,7 +19,7 @@
   "type": "module",
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
-    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/rate-limit": "^11.2.1",
     "@fastify/static": "^10.1.4",
     "@simplewebauthn/browser": "^14.0.0",
     "@simplewebauthn/server": "^14.0.2",
