@@ -44,7 +44,9 @@ function useImage(ref: ObjectRef, vault: VaultKey, enabled = true) {
     })();
     return () => {
       controller.abort();
-      if (objectURL) URL.revokeObjectURL(objectURL);
+      // Chrome loads an <img> src in a later task, even after the element is removed.
+      // Revoking now makes that load fail with ERR_FILE_NOT_FOUND.
+      if (objectURL) setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
     };
   }, [ref.id, enabled, vault]);
   return { url: enabled ? url : '', error };
