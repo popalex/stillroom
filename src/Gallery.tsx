@@ -18,6 +18,7 @@ import {
 import { api, fetchObject, uploadObject } from './api';
 import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
 import { importImage, renderThumbnail, THUMBNAIL_EDGE } from './images';
+import { neighbours, PreviewCache } from './previews';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
 
@@ -50,6 +51,66 @@ function useImage(ref: ObjectRef, vault: VaultKey, enabled = true) {
     };
   }, [ref.id, enabled, vault]);
   return { url: enabled ? url : '', error };
+}
+// Neighbours wait for the open image, then load two at a time so they share the
+// connection without holding up the next arrow press for long.
+const PREFETCH_LANES = 2;
+function usePreviews(images: ImageEntry[], index: number, vault: VaultKey) {
+  const cache = useMemo(() => new PreviewCache(vault), [vault]);
+  const last = useRef<{ index: number; direction: 1 | -1 }>({ index: -1, direction: 1 });
+  useEffect(() => () => cache.clear(), [cache]);
+  useEffect(() => {
+    if (index < 0) {
+      cache.clear();
+      last.current.index = -1;
+      return;
+    }
+    const before = last.current.index;
+    if (before >= 0 && index !== before) last.current.direction = index > before ? 1 : -1;
+    last.current.index = index;
+    const current = images[index].preview;
+    const queue = neighbours(last.current.direction)
+      .map((offset) => images[index + offset]?.preview)
+      .filter((ref) => ref !== undefined);
+    // The image last on screen stays too, since the viewer holds it dimmed until
+    // this one is ready. Running ahead with quick presses can leave it outside
+    // the window.
+    cache.keep(new Set([current.id, cache.shown, ...queue.map((ref) => ref.id)]));
+    let stopped = false;
+    const lane = async () => {
+      for (let ref = queue.shift(); ref && !stopped; ref = queue.shift())
+        await cache.load(ref, 'low').catch(() => {});
+    };
+    void cache
+      .load(current, 'high')
+      .catch(() => {})
+      .then(() => {
+        for (let i = 0; i < PREFETCH_LANES; i++) void lane();
+      });
+    return () => {
+      stopped = true;
+    };
+  }, [cache, images, index]);
+  return cache;
+}
+function usePreview(cache: PreviewCache, ref: ObjectRef) {
+  const [ready, setReady] = useState(() => cache.peek(ref.id)),
+    [error, setError] = useState('');
+  useEffect(() => {
+    let live = true;
+    cache.load(ref, 'high').then(
+      (preview) => live && setReady(preview),
+      (e) => live && setError(message(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [cache, ref.id]);
+  useEffect(() => {
+    if (ready) cache.shown = ref.id;
+  }, [cache, ready, ref.id]);
+  const stale = ready || error ? undefined : cache.peek(cache.shown);
+  return { url: ready?.url ?? '', stale: stale?.url ?? '', error };
 }
 function Thumbnail({
   image,
@@ -183,6 +244,7 @@ export function Gallery({
     [catalog, category, search, sortOrder],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
+  const previews = usePreviews(images, selectedIndex, initial.vault);
   // The deletion dialog doubles as the one for uncategorized images, which is not
   // a category and so cannot collide with a real name.
   const deletingLoose = deletingCategory === 'uncategorized';
@@ -729,6 +791,7 @@ export function Gallery({
           key={images[selectedIndex].id}
           image={images[selectedIndex]}
           vault={initial.vault}
+          previews={previews}
           categories={catalog.categories}
           admin={admin}
           busy={task.busy}
@@ -915,6 +978,7 @@ function useZoom(imageID: string, swipe: (direction: -1 | 1) => void) {
 function Viewer({
   image,
   vault,
+  previews,
   categories,
   admin,
   busy,
@@ -927,6 +991,7 @@ function Viewer({
 }: {
   image: ImageEntry;
   vault: VaultKey;
+  previews: PreviewCache;
   categories: string[];
   admin: boolean;
   busy: boolean;
@@ -937,7 +1002,7 @@ function Viewer({
   save: (changes: Pick<ImageEntry, 'name' | 'category'>, newCategory?: string) => Promise<void>;
   remove: () => Promise<void>;
 }) {
-  const { url, error } = useImage(image.preview, vault);
+  const { url, stale, error } = usePreview(previews, image.preview);
   const { frame, picture, view, smooth, panning, zoom, handlers } = useZoom(
     image.id,
     (direction) => (direction < 0 ? previous?.() : next?.()),
@@ -986,7 +1051,10 @@ function Viewer({
             style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}
           />
         ) : (
-          <p role="status">{error || 'Opening image…'}</p>
+          <>
+            {stale && <img className="viewer-stale" src={stale} alt="" draggable={false} />}
+            <p role="status">{error || 'Opening image…'}</p>
+          </>
         )}
         <button
           className="viewer-prev icon-button"

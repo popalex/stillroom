@@ -729,6 +729,19 @@ dialog::backdrop {
 .viewer-image.smooth img {
   transition: transform 0.18s ease-out;
 }
+/* The previous image, held dimmed while the next one loads. */
+.viewer-image img.viewer-stale {
+  opacity: 0.35;
+  cursor: default;
+}
+/* Absolute, so it sits centred over a held image instead of beside it. */
+.viewer-image [role='status'] {
+  position: absolute;
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--navy);
+}
 .viewer-prev,
 .viewer-next {
   position: absolute;

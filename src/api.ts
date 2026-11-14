@@ -53,11 +53,16 @@ export async function uploadObject(
     signal.throwIfAborted();
   }
 }
-export async function fetchObject(id: string, signal: AbortSignal) {
+export async function fetchObject(
+  id: string,
+  signal: AbortSignal,
+  priority: RequestPriority = 'auto',
+) {
   const response = await fetch(`/api/objects/${id}`, {
     credentials: 'same-origin',
     cache: 'no-store',
     signal,
+    priority,
   });
   if (!response.ok)
     throw new ApiError(
