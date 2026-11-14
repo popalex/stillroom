@@ -218,9 +218,36 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   expect(await page.evaluate(async () => (await fetch('/api/vault')).json())).toEqual(
     catalogBeforeSorting,
   );
+  // Every GET for an object from here on is a viewing preview, once the grid's
+  // thumbnails are in.
+  await expect(page.locator('.image-card img')).toHaveCount(3);
+  let event = 0;
+  const previewLoads = new Map<string, { started: number; finished?: number }>();
+  page.on('request', (req) => {
+    if (req.method() === 'GET' && req.url().includes('/api/objects/'))
+      previewLoads.set(req.url(), { started: event++ });
+  });
+  page.on('requestfinished', (req) => {
+    const load = previewLoads.get(req.url());
+    if (load) load.finished = event++;
+  });
   await page.getByRole('button', { name: 'View alpha.png' }).click();
+  await expect(page.getByRole('dialog').locator('.viewer-image img')).toBeVisible();
+  // alpha.png and both of its neighbours, the open image first.
+  await expect.poll(() => [...previewLoads.values()].filter((l) => l.finished).length).toBe(3);
+  const [first, ...rest] = [...previewLoads.values()];
+  for (const load of rest) expect(load.started).toBeGreaterThan(first.finished!);
   await page.getByRole('button', { name: 'Next image' }).click();
+  // Already decoded, so the image is there in the same render as the click.
+  expect(await page.locator('.viewer-image [role="status"]').count()).toBe(0);
   await expect(page.getByRole('dialog')).toHaveAccessibleName('photo2.png');
+  await expect(page.getByRole('dialog').locator('.viewer-image img')).toBeVisible();
+  expect(previewLoads.size).toBe(3);
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  // Closing the viewer drops the decrypted previews, so opening it again fetches.
+  previewLoads.clear();
+  await page.getByRole('button', { name: 'View alpha.png' }).click();
+  await expect.poll(() => previewLoads.size).toBe(3);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Search photographs' }).fill('photo');
   await expect(names).toHaveText(['photo2.png', 'photo10.png']);
