@@ -592,21 +592,55 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await pickImage('tile-299.png').click({ modifiers: ['Shift'] });
   await expect(bar.getByRole('status')).toHaveText(`${many} selected`);
   await page.screenshot({ path: 'test-results/windowed-grid-mobile.png', animations: 'disabled' });
-  // Lamp off: the dark theme follows the device's colour scheme.
+  // Appearance: Automatic follows the device, Light and Dark override it, and
+  // each device's choice is saved on the server.
   await page.keyboard.press('Escape');
-  await page.emulateMedia({ colorScheme: 'dark' });
-  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
-    'rgb(23, 27, 32)',
+  const room = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const savedTheme = () =>
+    page.evaluate(async () => (await (await fetch('/api/preferences')).json()).theme);
+  const lightRoom = 'rgb(238, 241, 244)',
+    darkRoom = 'rgb(23, 27, 32)';
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.evaluate(() => scrollTo(0, 0));
+  const appearance = page.getByRole('group', { name: 'Appearance' });
+  await expect(appearance.getByRole('button', { name: 'Automatic' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
   );
-  for (const [width, name] of [
-    [1280, 'desktop'],
-    [390, 'mobile'],
-  ] as const) {
-    await page.setViewportSize({ width, height: 800 });
-    await page.evaluate(() => scrollTo(0, 0));
-    await page.screenshot({ path: `test-results/dark-${name}.png`, animations: 'disabled' });
-  }
+  expect(await room()).toBe(lightRoom);
+  await appearance.getByRole('button', { name: 'Dark' }).click();
+  await expect.poll(room).toBe(darkRoom);
+  await expect.poll(savedTheme).toBe('dark');
+  await page.screenshot({ path: 'test-results/dark-desktop.png', animations: 'disabled' });
+  // The saved choice comes back after a reload, once the gallery unlocks.
+  await page.reload();
+  await page.getByRole('button', { name: 'Sign in with passkey' }).click();
+  await page
+    .getByLabel('Vault passphrase', { exact: true })
+    .fill('a new passphrase for recovery testing');
+  await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
+  await expect(appearance.getByRole('button', { name: 'Dark' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await expect.poll(room).toBe(darkRoom);
+  await appearance.getByRole('button', { name: 'Automatic' }).click();
+  await expect.poll(room).toBe(lightRoom);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect.poll(room).toBe(darkRoom);
+  // On a phone one round button cycles Automatic, Light, Dark. An explicit
+  // Light wins over a dark device.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.getByRole('button', { name: 'Appearance: Automatic. Change appearance' }).click();
+  await expect.poll(room).toBe(lightRoom);
+  await expect.poll(savedTheme).toBe('light');
+  await page.getByRole('button', { name: 'Appearance: Light. Change appearance' }).click();
+  await expect.poll(room).toBe(darkRoom);
+  await page.screenshot({ path: 'test-results/dark-mobile.png', animations: 'disabled' });
+  await page.getByRole('button', { name: 'Appearance: Dark. Change appearance' }).click();
+  await expect.poll(savedTheme).toBe('system');
   await page.emulateMedia({ colorScheme: 'light' });
+  await expect.poll(room).toBe(lightRoom);
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
 });
