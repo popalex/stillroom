@@ -18,7 +18,13 @@ import {
 import { api, fetchObject, uploadObject } from './api';
 import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
 import { importImage, renderThumbnail, THUMBNAIL_EDGE } from './images';
-import { categoryName, moveImages, resolveChoice, type CategoryChoice } from './categories';
+import {
+  categoryName,
+  deleteImages,
+  moveImages,
+  resolveChoice,
+  type CategoryChoice,
+} from './categories';
 import { neighbours, PreviewCache } from './previews';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
@@ -315,9 +321,12 @@ export function Gallery({
       creating: false,
       newName: '',
     }),
-    [notice, setNotice] = useState('');
+    [notice, setNotice] = useState(''),
+    [deletingChosen, setDeletingChosen] = useState(false);
   const anchor = useRef<string | null>(null);
   const chosenCount = catalog.images.filter((image) => chosen.has(image.id)).length;
+  const chosenHidden = chosenCount - images.filter((image) => chosen.has(image.id)).length;
+  const plural = (count: number) => `${count} ${count === 1 ? 'image' : 'images'}`;
   // A shift-click adds every image between the last one clicked and this one, in
   // the order the grid shows them.
   const pick = (id: string, range: boolean) => {
@@ -819,11 +828,7 @@ export function Gallery({
                 await save(moveImages(catalog, chosen, category, added));
                 stopSelecting();
                 setMoveChoice({ category, creating: false, newName: '' });
-                setNotice(
-                  `Moved ${chosenCount} ${chosenCount === 1 ? 'image' : 'images'} to ${
-                    category || 'Uncategorized'
-                  }.`,
-                );
+                setNotice(`Moved ${plural(chosenCount)} to ${category || 'Uncategorized'}.`);
               });
             }}
           >
@@ -852,6 +857,17 @@ export function Gallery({
             />
             <button className="primary" disabled={task.busy || !chosenCount}>
               Move
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={task.busy || !chosenCount}
+              onClick={() => {
+                task.setError('');
+                setDeletingChosen(true);
+              }}
+            >
+              Delete
             </button>
             <div className="details-error">
               <ErrorNotice error={task.error} />
@@ -885,6 +901,44 @@ export function Gallery({
           </div>
         )}
       </main>
+      {deletingChosen && (
+        <Dialog
+          title={`Delete ${plural(chosenCount)}`}
+          onClose={() => !task.busy && setDeletingChosen(false)}
+        >
+          <p>Permanently delete the {plural(chosenCount)} you selected?</p>
+          <p className="muted">
+            {chosenHidden > 0 &&
+              `${chosenHidden} of them ${
+                chosenHidden === 1 ? 'is' : 'are'
+              } hidden by the current category or search. `}
+            Originals, previews, and thumbnails will be deleted from this server. You cannot undo
+            this. Separate backups and downloaded copies are not deleted.
+          </p>
+          <ErrorNotice error={task.error} />
+          <div className="dialog-actions">
+            <button disabled={task.busy} onClick={() => setDeletingChosen(false)}>
+              Cancel
+            </button>
+            <button
+              className="primary destructive"
+              disabled={task.busy}
+              onClick={() =>
+                void task.run(async () => {
+                  const { catalog: next, objects } = deleteImages(catalog, chosen);
+                  await save(next, objects.length ? objects : undefined);
+                  const deleted = chosenCount;
+                  setDeletingChosen(false);
+                  stopSelecting();
+                  setNotice(`Deleted ${plural(deleted)}.`);
+                })
+              }
+            >
+              {task.busy ? 'Deleting…' : `Permanently delete ${plural(chosenCount)}`}
+            </button>
+          </div>
+        </Dialog>
+      )}
       {deletingCategory !== null && (
         <Dialog
           title={deletingLoose ? 'Delete uncategorized images' : 'Delete category'}
