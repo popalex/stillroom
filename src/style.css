@@ -522,6 +522,67 @@ h2 {
   border-radius: 3px;
   display: grid;
   place-items: center;
+  position: relative;
+}
+/* Select mode. A shift-click would otherwise select the page's text, and a long
+   press on iPad would open the image callout instead of letting go. */
+.image-grid.selecting {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.image-check {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--white);
+  border-radius: 50%;
+  background: rgb(33 56 71 / 0.35);
+  color: var(--white);
+}
+.image-card.checked .image-check {
+  background: var(--teal);
+  border-color: var(--teal);
+}
+.image-card.checked .image-well {
+  box-shadow: inset 0 0 0 3px var(--teal);
+}
+.selection-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-top: 28px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  box-shadow: 0 -6px 24px rgb(33 56 71 / 0.12);
+}
+.selection-count {
+  margin: 0 auto 0 0;
+  align-self: center;
+  font-weight: 600;
+}
+.selection-bar .category-field {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.selection-bar label select,
+.selection-bar label input {
+  min-width: 170px;
+}
+.selection-bar .details-error {
+  flex-basis: 100%;
 }
 .image-well img {
   width: 100%;
@@ -1030,6 +1091,21 @@ dialog::backdrop {
   }
   .dialog-heading h2 {
     max-width: 80%;
+  }
+}
+@media (max-width: 720px) {
+  .selection-bar .category-field {
+    flex-basis: 100%;
+  }
+  .selection-bar .category-field label {
+    flex: 1;
+  }
+  .selection-bar label select,
+  .selection-bar label input {
+    min-width: 0;
+  }
+  .selection-bar .primary {
+    flex: 1;
   }
 }
 @media (prefers-reduced-motion: reduce) {

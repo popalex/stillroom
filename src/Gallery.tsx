@@ -18,7 +18,7 @@ import {
 import { api, fetchObject, uploadObject } from './api';
 import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
 import { importImage, renderThumbnail, THUMBNAIL_EDGE } from './images';
-import { categoryName, resolveChoice, type CategoryChoice } from './categories';
+import { categoryName, moveImages, resolveChoice, type CategoryChoice } from './categories';
 import { neighbours, PreviewCache } from './previews';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
@@ -118,11 +118,17 @@ function Thumbnail({
   vault,
   index,
   open,
+  selecting,
+  checked,
+  pick,
 }: {
   image: ImageEntry;
   vault: VaultKey;
   index: number;
   open: () => void;
+  selecting: boolean;
+  checked: boolean;
+  pick: (range: boolean) => void;
 }) {
   const ref = useRef<HTMLButtonElement>(null),
     [near, setNear] = useState(false);
@@ -135,8 +141,19 @@ function Thumbnail({
   }, []);
   const { url, error } = useImage(image.thumbnail, vault, near);
   return (
-    <button ref={ref} className="image-card" onClick={open} aria-label={`View ${image.name}`}>
+    <button
+      ref={ref}
+      className={`image-card${checked ? ' checked' : ''}`}
+      onClick={(e) => (selecting ? pick(e.shiftKey) : open())}
+      aria-label={`${selecting ? 'Select' : 'View'} ${image.name}`}
+      aria-pressed={selecting ? checked : undefined}
+    >
       <div className="image-well">
+        {selecting && (
+          <span className="image-check" aria-hidden="true">
+            {checked && <Icon name="check" size={16} />}
+          </span>
+        )}
         {url ? (
           <img src={url} alt="" />
         ) : (
@@ -288,6 +305,61 @@ export function Gallery({
     [catalog, category, search, sortOrder],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
+  // Select mode: thumbnails toggle membership in `chosen` instead of opening the
+  // viewer. Choices persist across category and search changes, so images from
+  // several views can move together.
+  const [selecting, setSelecting] = useState(false),
+    [chosen, setChosen] = useState<ReadonlySet<string>>(() => new Set()),
+    [moveChoice, setMoveChoice] = useState<CategoryChoice>({
+      category: '',
+      creating: false,
+      newName: '',
+    }),
+    [moved, setMoved] = useState('');
+  const anchor = useRef<string | null>(null);
+  const chosenCount = catalog.images.filter((image) => chosen.has(image.id)).length;
+  // A shift-click adds every image between the last one clicked and this one, in
+  // the order the grid shows them.
+  const pick = (id: string, range: boolean) => {
+    const to = images.findIndex((image) => image.id === id);
+    const from = range ? images.findIndex((image) => image.id === anchor.current) : -1;
+    setChosen((current) => {
+      const next = new Set(current);
+      if (from >= 0)
+        for (const image of images.slice(Math.min(from, to), Math.max(from, to) + 1))
+          next.add(image.id);
+      else if (!next.delete(id)) next.add(id);
+      return next;
+    });
+    anchor.current = id;
+    setMoved('');
+  };
+  const chooseAll = () => {
+    setChosen((current) => new Set([...current, ...images.map((image) => image.id)]));
+    setMoved('');
+  };
+  const stopSelecting = () => {
+    setSelecting(false);
+    setChosen(new Set());
+    anchor.current = null;
+    setMoved('');
+    task.setError('');
+  };
+  useEffect(() => {
+    if (!selecting) return;
+    const handle = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement;
+      if (target.closest('dialog') || ['INPUT', 'SELECT', 'TEXTAREA'].includes(target.tagName))
+        return;
+      if (event.key === 'Escape') stopSelecting();
+      if (event.key === 'a' && (event.metaKey || event.ctrlKey)) {
+        event.preventDefault();
+        chooseAll();
+      }
+    };
+    window.addEventListener('keydown', handle);
+    return () => window.removeEventListener('keydown', handle);
+  });
   const previews = usePreviews(images, selectedIndex, initial.vault);
   // The deletion dialog doubles as the one for uncategorized images, which is not
   // a category and so cannot collide with a real name.
@@ -574,6 +646,15 @@ export function Gallery({
             >
               <Icon name="lock" />
             </button>
+            {admin && (selecting || catalog.images.length > 0) && (
+              <button
+                className="secondary"
+                disabled={task.busy}
+                onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+              >
+                {selecting ? 'Done' : 'Select'}
+              </button>
+            )}
             {admin &&
               (catalog.categories.includes(category) ||
                 (category === 'uncategorized' &&
@@ -643,7 +724,7 @@ export function Gallery({
             Unlocked on this device
           </span>
         </div>
-        <ErrorNotice error={task.error} />
+        {!selecting && <ErrorNotice error={task.error} />}
         <ErrorNotice error={sortLoadError || sortTask.error} />
         {pendingDeletions > 0 && (
           <p role="alert">
@@ -675,7 +756,7 @@ export function Gallery({
           </div>
         )}
         {images.length ? (
-          <div className="image-grid">
+          <div className={`image-grid${selecting ? ' selecting' : ''}`}>
             {images.map((image, index) => (
               <Thumbnail
                 key={image.id}
@@ -683,6 +764,9 @@ export function Gallery({
                 index={index}
                 vault={initial.vault}
                 open={() => setSelected(image.id)}
+                selecting={selecting}
+                checked={chosen.has(image.id)}
+                pick={(range) => pick(image.id, range)}
               />
             ))}
           </div>
@@ -716,6 +800,60 @@ export function Gallery({
             )}
             <span className="format-hint">JPEG, PNG, WebP · Up to 25 MiB per image</span>
           </div>
+        )}
+        {selecting && (
+          <form
+            className="selection-bar"
+            aria-label="Move selected images"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void task.run(async () => {
+                const { category, added } = resolveChoice(moveChoice, catalog.categories);
+                await save(moveImages(catalog, chosen, category, added));
+                setChosen(new Set());
+                anchor.current = null;
+                setMoveChoice({ category, creating: false, newName: '' });
+                setMoved(
+                  `Moved ${chosenCount} ${chosenCount === 1 ? 'image' : 'images'} to ${
+                    category || 'Uncategorized'
+                  }.`,
+                );
+              });
+            }}
+          >
+            <p className="selection-count" role="status">
+              {moved || `${chosenCount} selected`}
+            </p>
+            <button type="button" disabled={task.busy || !images.length} onClick={chooseAll}>
+              Select all
+            </button>
+            <button
+              type="button"
+              disabled={task.busy || !chosenCount}
+              onClick={() => {
+                setChosen(new Set());
+                setMoved('');
+              }}
+            >
+              Clear
+            </button>
+            <CategoryPicker
+              categories={catalog.categories}
+              choice={moveChoice}
+              disabled={task.busy}
+              label="Move to"
+              onChange={(next) => {
+                if (next.creating !== moveChoice.creating) task.setError('');
+                setMoveChoice(next);
+              }}
+            />
+            <button className="primary" disabled={task.busy || !chosenCount}>
+              Move
+            </button>
+            <div className="details-error">
+              <ErrorNotice error={task.error} />
+            </div>
+          </form>
         )}
         <footer className="collection-footer">
           <span>STILLROOM / PERSONAL ARCHIVE</span>
