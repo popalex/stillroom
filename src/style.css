@@ -610,7 +610,12 @@ h2 {
 .selection-bar .details-error {
   flex-basis: 100%;
 }
+/* Pinned to the well's edges: a percentage height alone doesn't resolve inside
+   the well's grid, so a portrait image would take its own height and the well
+   would crop its bottom instead of letterboxing it. */
 .image-well img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
