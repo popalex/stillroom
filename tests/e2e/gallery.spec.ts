@@ -254,6 +254,18 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.getByRole('searchbox', { name: 'Search photographs' }).fill('');
   await page.getByRole('button', { name: /^Private walks/ }).click();
   await expect(names).toHaveCount(0);
+  // Select needs something to select in the current view, not just the collection.
+  await expect(page.getByRole('button', { name: 'Select', exact: true })).toHaveCount(0);
+  // Uncategorized has no icon, but its count still looks like the others.
+  const countStyle = (label: RegExp) =>
+    page
+      .getByRole('button', { name: label })
+      .locator('.nav-count')
+      .evaluate((count) => {
+        const style = getComputedStyle(count);
+        return [style.color, style.fontSize, style.fontFamily].join(' ');
+      });
+  expect(await countStyle(/^Uncategorized/)).toBe(await countStyle(/^All photographs/));
   await page.getByRole('button', { name: /^All photographs/ }).click();
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
   // The logo goes back to the whole collection from a category and a search.
