@@ -23,6 +23,9 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   page,
   context,
 }) => {
+  // One long journey through the app, including 300 uploads and animations that
+  // Playwright waits out before each click.
+  test.setTimeout(120_000);
   await authenticator(context, page);
   const uploadedBodies: Buffer[] = [];
   const external: string[] = [];
@@ -101,7 +104,11 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.getByRole('button', { name: 'Create enrollment code' }).click();
   const invitation = await page.locator('.invite-result output').innerText();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await page.screenshot({ path: 'test-results/gallery-desktop.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/gallery-desktop.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
 
   const phone = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -120,13 +127,17 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(viewer.getByRole('button', { name: 'View private-garden.png' })).toBeVisible();
   await expect(viewer.getByRole('button', { name: 'Upload images', exact: true })).toHaveCount(0);
   await viewer.getByRole('button', { name: /^Private walks/ }).click();
-  await expect(viewer.getByRole('button', { name: 'Delete category', exact: true })).toHaveCount(0);
+  await expect(viewer.getByRole('button', { name: /^More actions for/ })).toHaveCount(0);
   await viewer.getByRole('combobox', { name: 'Sort by', exact: true }).selectOption('name-desc');
   await expect(viewer.getByRole('combobox', { name: 'Sort by', exact: true })).toBeEnabled();
   expect(await viewer.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
     true,
   );
-  await viewer.screenshot({ path: 'test-results/gallery-mobile.png', fullPage: true });
+  await viewer.screenshot({
+    path: 'test-results/gallery-mobile.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
   await viewer.getByRole('button', { name: 'View private-garden.png' }).click();
   await expect(viewer.getByRole('dialog').locator('img')).toBeVisible();
   const download = viewer.waitForEvent('download');
@@ -204,6 +215,19 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   );
   await expect(page.getByRole('button', { name: 'Upload images', exact: true })).toBeEnabled();
   const names = page.locator('.image-card .image-name');
+  // Phones keep the search field behind a round button until it is opened.
+  const searchField = page.locator('.search-field input');
+  const searchFor = async (text: string) => {
+    if (!(await searchField.isVisible()))
+      await page.getByRole('button', { name: 'Open search', exact: true }).click();
+    await page.getByRole('searchbox', { name: 'Search photographs' }).fill(text);
+  };
+  // Rename and Delete category live in the ⋯ menu of an open category.
+  const categoryMenu = page.getByRole('button', { name: /^More actions for/ });
+  const categoryAction = async (name: string) => {
+    await categoryMenu.click();
+    await page.getByRole('menuitem', { name, exact: true }).click();
+  };
   await expect(names).toHaveText(['photo10.png', 'alpha.png', 'photo2.png']);
   const catalogBeforeSorting = await page.evaluate(async () => (await fetch('/api/vault')).json());
   for (const [order, expected] of [
@@ -249,9 +273,9 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.getByRole('button', { name: 'View alpha.png' }).click();
   await expect.poll(() => previewLoads.size).toBe(3);
   await page.getByRole('button', { name: 'Close', exact: true }).click();
-  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('photo');
+  await searchFor('photo');
   await expect(names).toHaveText(['photo2.png', 'photo10.png']);
-  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('');
+  await searchFor('');
   await page.getByRole('button', { name: /^Private walks/ }).click();
   await expect(names).toHaveCount(0);
   // Select needs something to select in the current view, not just the collection.
@@ -270,13 +294,17 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
   // The logo goes back to the whole collection from a category and a search.
   await page.getByRole('button', { name: /^Private walks/ }).click();
-  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('alpha');
+  await searchFor('alpha');
   await page.getByRole('button', { name: 'stillroom, show all photographs' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('All photographs');
-  await expect(page.getByRole('searchbox', { name: 'Search photographs' })).toHaveValue('');
+  await expect(searchField).toHaveValue('');
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/sorting-mobile.png', fullPage: true });
+  await page.screenshot({
+    path: 'test-results/sorting-mobile.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
   await page.reload();
   await page.getByRole('button', { name: 'Sign in with passkey' }).click();
   await page
@@ -285,9 +313,9 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
   await expect(sort).toHaveValue('name-asc');
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
-  await expect(page.getByRole('button', { name: 'Delete category', exact: true })).toHaveCount(0);
+  await expect(categoryMenu).toHaveCount(0);
   await page.getByRole('button', { name: /^Private walks/ }).click();
-  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await categoryAction('Delete category');
   await expect(page.getByRole('dialog')).toContainText('all 0 images');
   await page.getByRole('button', { name: 'Permanently delete category', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
@@ -314,12 +342,15 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await bar.getByRole('button', { name: 'New category', exact: true }).click();
   await bar.getByLabel('New category name', { exact: true }).fill(' Trips ');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/bulk-move-mobile.png' });
+  await page.screenshot({ path: 'test-results/bulk-move-mobile.png', animations: 'disabled' });
   await bar.getByRole('button', { name: 'Move', exact: true }).click();
   // A move ends select mode and says where the images went.
   const notice = page.locator('.gallery-notice');
   await expect(notice).toHaveText('Moved 2 images to Trips.');
-  await page.screenshot({ path: 'test-results/bulk-move-notice-mobile.png' });
+  await page.screenshot({
+    path: 'test-results/bulk-move-notice-mobile.png',
+    animations: 'disabled',
+  });
   await expect(bar).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'View alpha.png', exact: true })).toBeVisible();
   expect(catalogWrites).toBe(1);
@@ -332,7 +363,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   // Renaming a category moves its images with it and keeps it open. A reserved
   // name fails, and a change of capitalisation alone is allowed.
   await page.getByRole('button', { name: /^Trips/ }).click();
-  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await categoryAction('Rename');
   const rename = page.getByRole('dialog', { name: 'Rename category' });
   const newName = rename.getByLabel('New name for "Trips"');
   await expect(newName).toHaveValue('Trips');
@@ -340,18 +371,21 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
   await expect(rename.getByRole('alert')).toContainText('Choose a different category name');
   await newName.fill(' Holidays ');
-  await page.screenshot({ path: 'test-results/rename-category-mobile.png' });
+  await page.screenshot({
+    path: 'test-results/rename-category-mobile.png',
+    animations: 'disabled',
+  });
   await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
   await expect(rename).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Holidays');
   await expect(page.getByRole('button', { name: /^Holidays/ })).toContainText('2');
   await expect(page.getByRole('button', { name: /^Trips/ })).toHaveCount(0);
   await expect(page.locator('.image-card .image-category')).toHaveText(['Holidays', 'Holidays']);
-  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await categoryAction('Rename');
   await rename.getByLabel('New name for "Holidays"').fill('trips');
   await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('trips');
-  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await categoryAction('Rename');
   await rename.getByLabel('New name for "trips"').fill('Trips');
   await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Trips');
@@ -368,14 +402,14 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(bar.getByRole('status')).toHaveText('2 selected');
   await bar.getByRole('combobox', { name: 'Move to', exact: true }).selectOption('');
   await page.setViewportSize({ width: 1280, height: 640 });
-  await page.screenshot({ path: 'test-results/bulk-move-desktop.png' });
+  await page.screenshot({ path: 'test-results/bulk-move-desktop.png', animations: 'disabled' });
   await bar.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(notice).toHaveText('Moved 2 images to Uncategorized.');
   await expect(bar).toHaveCount(0);
   expect(catalogWrites).toBe(5);
   await expect(names).toHaveCount(0);
   await expect(notice).toHaveCount(0, { timeout: 6000 });
-  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await categoryAction('Delete category');
   await page.getByRole('button', { name: 'Permanently delete category', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Trips/ })).toHaveCount(0);
   await page.getByRole('button', { name: /^All photographs/ }).click();
@@ -411,25 +445,28 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   }
   await page.getByRole('button', { name: /^To delete/ }).click();
   await expect(names).toHaveText(['alpha.png', 'photo2.png']);
-  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('alpha');
+  await searchFor('alpha');
   await expect(names).toHaveText(['alpha.png']);
-  await expect(page.getByRole('button', { name: 'Delete category', exact: true })).toBeInViewport({
-    ratio: 1,
-  });
+  await expect(categoryMenu).toBeInViewport({ ratio: 1 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: 'test-results/category-actions-mobile.png', fullPage: true });
-  // The header's delete is an outline; only the dialog's confirm is solid red.
-  const background = (name: string) =>
+  await page.screenshot({
+    path: 'test-results/category-actions-mobile.png',
+    fullPage: true,
+    animations: 'disabled',
+  });
+  // The menu's delete is red text with no fill; only the dialog's confirm is solid red.
+  const background = (role: 'button' | 'menuitem', name: string) =>
     page
-      .getByRole('button', { name, exact: true })
+      .getByRole(role, { name, exact: true })
       .evaluate((button) => getComputedStyle(button).backgroundColor);
-  expect(await background('Delete category')).toBe('rgba(0, 0, 0, 0)');
-  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await categoryMenu.click();
+  expect(await background('menuitem', 'Delete category')).toBe('rgba(0, 0, 0, 0)');
+  await page.getByRole('menuitem', { name: 'Delete category', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('"To delete" and all 2 images');
-  expect(await background('Permanently delete category')).toBe('rgb(166, 64, 64)');
+  expect(await background('button', 'Permanently delete category')).toBe('rgb(179, 38, 30)');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(names).toHaveText(['alpha.png']);
-  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await categoryAction('Delete category');
   const deletionRequest = page.waitForRequest(
     (request) => request.method() === 'PUT' && request.url().endsWith('/api/catalog'),
   );
@@ -437,12 +474,12 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   expect((await deletionRequest).postDataJSON().deleteObjects).toHaveLength(6);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^To delete/ })).toHaveCount(0);
-  await expect(page.getByRole('searchbox', { name: 'Search photographs' })).toHaveValue('');
+  await expect(searchField).toHaveValue('');
   await expect(names).toHaveText(['photo10.png']);
   // Bulk delete counts picks that the search hides, and Cancel keeps them.
   await page.getByRole('button', { name: 'Select', exact: true }).click();
   await pickImage('photo10.png').click();
-  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('nothing matches');
+  await searchFor('nothing matches');
   await expect(names).toHaveCount(0);
   await expect(bar.getByRole('status')).toHaveText('1 selected');
   await bar.getByRole('button', { name: 'Delete', exact: true }).click();
@@ -459,7 +496,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   expect((await bulkDeletion).postDataJSON().deleteObjects).toHaveLength(3);
   await expect(notice).toHaveText('Deleted 1 image.');
   await expect(bar).toHaveCount(0);
-  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('');
+  await searchFor('');
   await expect(names).toHaveCount(0);
   await page.reload();
   await page.getByRole('button', { name: 'Sign in with passkey' }).click();
@@ -496,10 +533,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
       buffer: Buffer.from(data, 'base64'),
     })),
   );
-  await expect(page.locator('.collection-header .muted')).toHaveText(
-    `${many} photographs in your collection`,
-    { timeout: 120_000 },
-  );
+  await expect(page.locator('.collection-count')).toHaveText(`${many}`, { timeout: 120_000 });
   await expect(page.locator('.upload-progress')).toHaveCount(0);
   await sort.selectOption('name-asc');
   const layout = () =>
@@ -557,7 +591,22 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
   await pickImage('tile-299.png').click({ modifiers: ['Shift'] });
   await expect(bar.getByRole('status')).toHaveText(`${many} selected`);
-  await page.screenshot({ path: 'test-results/windowed-grid-mobile.png' });
+  await page.screenshot({ path: 'test-results/windowed-grid-mobile.png', animations: 'disabled' });
+  // Lamp off: the dark theme follows the device's colour scheme.
+  await page.keyboard.press('Escape');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+    'rgb(23, 27, 32)',
+  );
+  for (const [width, name] of [
+    [1280, 'desktop'],
+    [390, 'mobile'],
+  ] as const) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(() => scrollTo(0, 0));
+    await page.screenshot({ path: `test-results/dark-${name}.png`, animations: 'disabled' });
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
 });
