@@ -567,7 +567,7 @@ h2 {
   border-radius: 7px;
   box-shadow: 0 -6px 24px rgb(33 56 71 / 0.12);
 }
-.move-notice {
+.gallery-notice {
   position: fixed;
   left: 50%;
   bottom: calc(24px + env(safe-area-inset-bottom));
@@ -584,9 +584,9 @@ h2 {
   background: var(--navy);
   color: var(--white);
   box-shadow: 0 6px 24px rgb(33 56 71 / 0.25);
-  animation: move-notice 4s ease-in forwards;
+  animation: gallery-notice 4s ease-in forwards;
 }
-@keyframes move-notice {
+@keyframes gallery-notice {
   0%,
   85% {
     opacity: 1;

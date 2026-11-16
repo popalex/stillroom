@@ -305,7 +305,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.screenshot({ path: 'test-results/bulk-move-mobile.png' });
   await bar.getByRole('button', { name: 'Move', exact: true }).click();
   // A move ends select mode and says where the images went.
-  const notice = page.locator('.move-notice');
+  const notice = page.locator('.gallery-notice');
   await expect(notice).toHaveText('Moved 2 images to Trips.');
   await page.screenshot({ path: 'test-results/bulk-move-notice-mobile.png' });
   await expect(bar).toHaveCount(0);

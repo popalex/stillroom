@@ -315,7 +315,7 @@ export function Gallery({
       creating: false,
       newName: '',
     }),
-    [moved, setMoved] = useState('');
+    [notice, setNotice] = useState('');
   const anchor = useRef<string | null>(null);
   const chosenCount = catalog.images.filter((image) => chosen.has(image.id)).length;
   // A shift-click adds every image between the last one clicked and this one, in
@@ -341,13 +341,13 @@ export function Gallery({
     anchor.current = null;
     task.setError('');
   };
-  // The notice after a move replaces the bar at the bottom of the screen, where
+  // The notice after a bulk action replaces the bar at the bottom of the screen, where
   // the person was looking, and fades on its own.
   useEffect(() => {
-    if (!moved) return;
-    const timer = setTimeout(() => setMoved(''), 4000);
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(''), 4000);
     return () => clearTimeout(timer);
-  }, [moved]);
+  }, [notice]);
   useEffect(() => {
     if (!selecting) return;
     const handle = (event: KeyboardEvent) => {
@@ -654,7 +654,7 @@ export function Gallery({
                 className="secondary"
                 disabled={task.busy}
                 onClick={() => {
-                  setMoved('');
+                  setNotice('');
                   if (selecting) stopSelecting();
                   else setSelecting(true);
                 }}
@@ -819,7 +819,7 @@ export function Gallery({
                 await save(moveImages(catalog, chosen, category, added));
                 stopSelecting();
                 setMoveChoice({ category, creating: false, newName: '' });
-                setMoved(
+                setNotice(
                   `Moved ${chosenCount} ${chosenCount === 1 ? 'image' : 'images'} to ${
                     category || 'Uncategorized'
                   }.`,
@@ -858,10 +858,10 @@ export function Gallery({
             </div>
           </form>
         )}
-        {moved && (
-          <p className="move-notice" role="status">
+        {notice && (
+          <p className="gallery-notice" role="status">
             <Icon name="check" size={16} />
-            {moved}
+            {notice}
           </p>
         )}
         <footer className="collection-footer">
