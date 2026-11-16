@@ -40,5 +40,13 @@ export function openStore(dataDir: string) {
     );
     PRAGMA user_version = 3;
   `);
+  // Version 4 adds the appearance preference. Existing rows follow the device.
+  const columns = db.prepare("SELECT name FROM pragma_table_info('device_preferences')").all();
+  if (!columns.some((column) => (column as { name: string }).name === 'theme'))
+    db.exec(`
+      ALTER TABLE device_preferences ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'
+        CHECK(theme IN ('system','light','dark'));
+    `);
+  db.pragma('user_version = 4');
   return db;
 }
