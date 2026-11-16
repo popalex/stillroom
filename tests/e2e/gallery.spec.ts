@@ -451,6 +451,82 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(page.getByRole('heading', { name: 'Your collection starts here' })).toBeVisible();
   await expect(names).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^To delete|^Private walks/ })).toHaveCount(0);
+
+  // A large collection renders only the rows near the screen. At every scroll
+  // position each rendered card must sit in its own row, the cards must cover
+  // the screen, and the padding must keep the grid as tall as all its rows.
+  const many = 300;
+  const tiles = await page.evaluate((count) => {
+    const out: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 160;
+      canvas.height = 120;
+      const ctx = canvas.getContext('2d')!;
+      ctx.fillStyle = `hsl(${(i * 37) % 360} 40% 60%)`;
+      ctx.fillRect(0, 0, 160, 120);
+      out.push(canvas.toDataURL('image/png').split(',')[1]);
+    }
+    return out;
+  }, many);
+  await page.getByLabel('Upload image files').setInputFiles(
+    tiles.map((data, i) => ({
+      name: `tile-${String(i).padStart(3, '0')}.png`,
+      mimeType: 'image/png',
+      buffer: Buffer.from(data, 'base64'),
+    })),
+  );
+  await expect(page.locator('.collection-header .muted')).toHaveText(
+    `${many} photographs in your collection`,
+    { timeout: 120_000 },
+  );
+  await expect(page.locator('.upload-progress')).toHaveCount(0);
+  await sort.selectOption('name-asc');
+  const layout = () =>
+    page.evaluate((count) => {
+      const grid = document.querySelector<HTMLElement>('.image-grid')!;
+      const cards = [...grid.querySelectorAll<HTMLElement>('.image-card')];
+      const style = getComputedStyle(grid);
+      const columns = style.gridTemplateColumns.split(' ').length;
+      const box = grid.getBoundingClientRect();
+      const stride = cards[0].getBoundingClientRect().height + parseFloat(style.rowGap);
+      const misplaced = cards.filter((card) => {
+        const index = Number(card.querySelector('.image-name')!.textContent!.slice(5, 8));
+        const top = box.top + Math.floor(index / columns) * stride;
+        return Math.abs(card.getBoundingClientRect().top - top) > 1;
+      });
+      const contentBottom = box.bottom - parseFloat(style.paddingBottom);
+      return {
+        rendered: cards.length,
+        misplaced: misplaced.length,
+        covered:
+          cards[0].getBoundingClientRect().top <= Math.max(0, box.top) + 1 &&
+          cards.at(-1)!.getBoundingClientRect().bottom >= Math.min(innerHeight, contentBottom) - 1,
+        fullHeight:
+          Math.abs(box.height - (Math.ceil(count / columns) * stride - parseFloat(style.rowGap))) <=
+          1,
+      };
+    }, many);
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(() => scrollTo(0, 0));
+    for (const at of [0, 0.3, 0.6, 1, 0.1]) {
+      await page.evaluate(
+        (at) => scrollTo(0, (document.documentElement.scrollHeight - innerHeight) * at),
+        at,
+      );
+      await expect.poll(layout).toMatchObject({ misplaced: 0, covered: true, fullHeight: true });
+      expect((await layout()).rendered).toBeLessThan(60);
+    }
+  }
+  // Selection still spans cards that are not rendered.
+  await page.evaluate(() => scrollTo(0, 0));
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await pickImage('tile-000.png').click();
+  await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+  await pickImage('tile-299.png').click({ modifiers: ['Shift'] });
+  await expect(bar.getByRole('status')).toHaveText(`${many} selected`);
+  await page.screenshot({ path: 'test-results/windowed-grid-mobile.png' });
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
 });
