@@ -164,6 +164,66 @@ function categoryName(value: string, categories: string[]) {
   if (categories.includes(name)) throw new Error('That category already exists.');
   return name;
 }
+// What a CategoryPicker holds: an existing category ('' is Uncategorized), or the
+// name typed for a new one.
+type CategoryChoice = { category: string; creating: boolean; newName: string };
+// The category to assign, plus the validated name to add first when the choice
+// is a new category. Throws if that name is unusable.
+function resolveChoice(choice: CategoryChoice, categories: string[]) {
+  if (!choice.creating) return { category: choice.category, added: undefined };
+  const added = categoryName(choice.newName, categories);
+  return { category: added, added };
+}
+function CategoryPicker({
+  categories,
+  choice,
+  onChange,
+  disabled,
+  label = 'Category',
+}: {
+  categories: string[];
+  choice: CategoryChoice;
+  onChange: (choice: CategoryChoice) => void;
+  disabled: boolean;
+  label?: string;
+}) {
+  return (
+    <div className="category-field">
+      {choice.creating ? (
+        <label>
+          New category name
+          <input
+            autoFocus
+            required
+            maxLength={80}
+            value={choice.newName}
+            onChange={(e) => onChange({ ...choice, newName: e.target.value })}
+          />
+        </label>
+      ) : (
+        <label>
+          {label}
+          <select
+            value={choice.category}
+            onChange={(e) => onChange({ ...choice, category: e.target.value })}
+          >
+            <option value="">Uncategorized</option>
+            {categories.map((c) => (
+              <option key={c}>{c}</option>
+            ))}
+          </select>
+        </label>
+      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange({ ...choice, creating: !choice.creating })}
+      >
+        {choice.creating ? 'Use existing category' : 'New category'}
+      </button>
+    </div>
+  );
+}
 
 // A batch commits the catalog every so many images, or every so often when the
 // images are slow to arrive.
@@ -1015,9 +1075,11 @@ function Viewer({
   const [editing, setEditing] = useState(false),
     [confirmDelete, setConfirmDelete] = useState(false);
   const [name, setName] = useState(image.name),
-    [category, setCategory] = useState(image.category);
-  const [creatingCategory, setCreatingCategory] = useState(false),
-    [newCategory, setNewCategory] = useState('');
+    [choice, setChoice] = useState<CategoryChoice>({
+      category: image.category,
+      creating: false,
+      newName: '',
+    });
   const task = useTask();
   const detailsRef = useRef<HTMLFormElement>(null);
   useEffect(() => {
@@ -1167,13 +1229,9 @@ function Viewer({
           onSubmit={(e) => {
             e.preventDefault();
             void task.run(async () => {
-              const addedCategory = creatingCategory
-                ? categoryName(newCategory, categories)
-                : undefined;
-              await save({ name: name.trim(), category: addedCategory ?? category }, addedCategory);
-              if (addedCategory) setCategory(addedCategory);
-              setCreatingCategory(false);
-              setNewCategory('');
+              const { category, added } = resolveChoice(choice, categories);
+              await save({ name: name.trim(), category }, added);
+              setChoice({ category, creating: false, newName: '' });
               setEditing(false);
             });
           }}
@@ -1187,40 +1245,15 @@ function Viewer({
               required
             />
           </label>
-          <div className="category-field">
-            {creatingCategory ? (
-              <label>
-                New category name
-                <input
-                  autoFocus
-                  required
-                  maxLength={80}
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
-                />
-              </label>
-            ) : (
-              <label>
-                Category
-                <select value={category} onChange={(e) => setCategory(e.target.value)}>
-                  <option value="">Uncategorized</option>
-                  {categories.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </label>
-            )}
-            <button
-              type="button"
-              disabled={task.busy}
-              onClick={() => {
-                task.setError('');
-                setCreatingCategory(!creatingCategory);
-              }}
-            >
-              {creatingCategory ? 'Use existing category' : 'New category'}
-            </button>
-          </div>
+          <CategoryPicker
+            categories={categories}
+            choice={choice}
+            disabled={task.busy}
+            onChange={(next) => {
+              if (next.creating !== choice.creating) task.setError('');
+              setChoice(next);
+            }}
+          />
           <button className="primary" disabled={busy || task.busy}>
             Save details
           </button>
