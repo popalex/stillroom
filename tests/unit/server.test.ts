@@ -11,6 +11,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import Database from 'better-sqlite3';
 import type { FastifyInstance } from 'fastify';
 import { buildApp, hash } from '../../server/app.js';
 import { drainDeletions } from '../../server/deletions.js';
@@ -196,6 +197,7 @@ describe('private API', () => {
     const viewerHeaders = headers(viewerToken, '100.80.0.2');
     expect((await app.inject({ url: '/api/preferences', headers: viewerHeaders })).json()).toEqual({
       sortOrder: 'date-desc',
+      theme: 'system',
     });
     for (const sortOrder of ['name-asc', 'name-desc', 'date-asc', 'date-desc']) {
       const response = await app.inject({
@@ -205,7 +207,7 @@ describe('private API', () => {
         payload: { sortOrder },
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ sortOrder });
+      expect(response.json()).toEqual({ sortOrder, theme: 'system' });
     }
     await app.inject({
       method: 'PUT',
@@ -215,6 +217,7 @@ describe('private API', () => {
     });
     expect((await app.inject({ url: '/api/preferences', headers: headers() })).json()).toEqual({
       sortOrder: 'date-desc',
+      theme: 'system',
     });
     expect((await app.inject({ url: '/api/vault', headers: headers() })).json()).toEqual(before);
     await app.close();
@@ -227,6 +230,67 @@ describe('private API', () => {
     });
     expect((await app.inject({ url: '/api/preferences', headers: viewerHeaders })).json()).toEqual({
       sortOrder: 'name-asc',
+      theme: 'system',
+    });
+  });
+  it('saves the appearance per credential without resetting the sort order', async () => {
+    const put = (payload: object, extra = headers()) =>
+      app.inject({ method: 'PUT', url: '/api/preferences', headers: extra, payload });
+    await put({ sortOrder: 'name-desc' });
+    for (const theme of ['dark', 'light', 'system']) {
+      const response = await put({ theme });
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ sortOrder: 'name-desc', theme });
+    }
+    await put({ theme: 'dark' });
+    await put({ sortOrder: 'date-asc' });
+    expect((await app.inject({ url: '/api/preferences', headers: headers() })).json()).toEqual({
+      sortOrder: 'date-asc',
+      theme: 'dark',
+    });
+    // Another device keeps its own appearance.
+    expect(
+      (
+        await app.inject({ url: '/api/preferences', headers: headers(viewerToken, '100.80.0.2') })
+      ).json().theme,
+    ).toBe('system');
+    for (const payload of [{ theme: 'sepia' }, { theme: 'dark', colour: 'red' }])
+      expect((await put(payload)).statusCode).toBe(400);
+  });
+  it('adds the appearance column to a database from before it existed', async () => {
+    await app.close();
+    const old = mkdtempSync(join(tmpdir(), 'stillroom-old-'));
+    try {
+      const raw = new Database(join(old, 'vault.sqlite'));
+      raw.exec(`
+        CREATE TABLE device_preferences (
+          credential_id TEXT PRIMARY KEY,
+          sort_order TEXT NOT NULL CHECK(sort_order IN ('date-desc','date-asc','name-asc','name-desc'))
+        );
+        INSERT INTO device_preferences VALUES ('device', 'name-asc');
+        PRAGMA user_version = 3;
+      `);
+      raw.close();
+      const db = openStore(old);
+      expect(db.prepare('SELECT sort_order, theme FROM device_preferences').all()).toEqual([
+        { sort_order: 'name-asc', theme: 'system' },
+      ]);
+      expect(db.pragma('user_version', { simple: true })).toBe(4);
+      expect(() => db.prepare("UPDATE device_preferences SET theme='sepia'").run()).toThrow(
+        /CHECK/,
+      );
+      db.close();
+      // Opening it again leaves it as it is.
+      openStore(old).close();
+    } finally {
+      rmSync(old, { recursive: true, force: true });
+    }
+    app = await buildApp({
+      origin: 'https://test.example.ts.net',
+      rpID: 'test.example.ts.net',
+      dataDir: dir,
+      production: true,
+      host: '127.0.0.1',
     });
   });
   it('validates preference writes and enforces session and origin checks', async () => {

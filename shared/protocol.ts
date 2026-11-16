@@ -55,8 +55,17 @@ export type Packet = z.infer<typeof packetSchema>;
 export type Envelope = z.infer<typeof envelopeSchema>;
 export type Role = 'admin' | 'viewer';
 export const sortOrderSchema = z.enum(['date-desc', 'date-asc', 'name-asc', 'name-desc']);
-export const preferencesSchema = z.object({ sortOrder: sortOrderSchema }).strict();
+// 'system' follows the device's light or dark setting.
+export const themeSchema = z.enum(['system', 'light', 'dark']);
+export const preferencesSchema = z
+  .object({ sortOrder: sortOrderSchema, theme: themeSchema })
+  .strict();
+// A save may carry either preference, so changing one never resets the other.
+export const preferenceChangeSchema = preferencesSchema
+  .partial()
+  .refine((change) => Object.keys(change).length > 0, 'Send at least one preference.');
 export type SortOrder = z.infer<typeof sortOrderSchema>;
+export type Theme = z.infer<typeof themeSchema>;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type ImageEntry = {
   id: string;
