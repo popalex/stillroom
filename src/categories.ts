@@ -36,3 +36,14 @@ export function moveImages(
     images: catalog.images.map((image) => (ids.has(image.id) ? { ...image, category } : image)),
   };
 }
+
+// Removes every image in `ids` from the catalog and lists the encrypted files
+// the server should delete with it: each image's original, thumbnail and
+// preview. Ids that are not in the catalog are ignored.
+export function deleteImages(catalog: Catalog, ids: ReadonlySet<string>) {
+  const doomed = catalog.images.filter((image) => ids.has(image.id));
+  return {
+    catalog: { ...catalog, images: catalog.images.filter((image) => !ids.has(image.id)) },
+    objects: doomed.flatMap((image) => [image.original.id, image.thumbnail.id, image.preview.id]),
+  };
+}
