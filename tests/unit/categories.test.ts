@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalog, ImageEntry } from '../../shared/protocol';
-import { categoryName, moveImages, resolveChoice } from '../../src/categories';
+import { categoryName, deleteImages, moveImages, resolveChoice } from '../../src/categories';
 
-const image = (id: string, category: string) => ({ id, name: `${id}.png`, category }) as ImageEntry;
+const image = (id: string, category: string) =>
+  ({
+    id,
+    name: `${id}.png`,
+    category,
+    original: { id: `${id}-o` },
+    thumbnail: { id: `${id}-t` },
+    preview: { id: `${id}-p` },
+  }) as ImageEntry;
 const catalog: Catalog = {
   v: 1,
   categories: ['Walks', 'Trips'],
@@ -57,5 +65,20 @@ describe('moving images', () => {
       ['d', 'Trips'],
     ]);
     expect(moved.images).toHaveLength(4);
+  });
+});
+
+describe('deleting images', () => {
+  it('drops the chosen images and lists their three files each', () => {
+    const { catalog: left, objects } = deleteImages(catalog, new Set(['b', 'd', 'gone']));
+    expect(left.images.map((i) => i.id)).toEqual(['a', 'c']);
+    expect(left.categories).toBe(catalog.categories);
+    expect(objects).toEqual(['b-o', 'b-t', 'b-p', 'd-o', 'd-t', 'd-p']);
+    expect(catalog.images).toHaveLength(4);
+  });
+  it('changes nothing for an empty selection', () => {
+    const { catalog: left, objects } = deleteImages(catalog, new Set());
+    expect(left.images).toEqual(catalog.images);
+    expect(objects).toEqual([]);
   });
 });
