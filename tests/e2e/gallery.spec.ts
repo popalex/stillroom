@@ -394,13 +394,36 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(page.getByRole('button', { name: /^To delete/ })).toHaveCount(0);
   await expect(page.getByRole('searchbox', { name: 'Search photographs' })).toHaveValue('');
   await expect(names).toHaveText(['photo10.png']);
+  // Bulk delete counts picks that the search hides, and Cancel keeps them.
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await pickImage('photo10.png').click();
+  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('nothing matches');
+  await expect(names).toHaveCount(0);
+  await expect(bar.getByRole('status')).toHaveText('1 selected');
+  await bar.getByRole('button', { name: 'Delete', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Delete 1 image' });
+  await expect(confirm).toContainText('1 of them is hidden by the current category or search');
+  await confirm.getByRole('button', { name: 'Cancel', exact: true }).click();
+  await expect(confirm).toHaveCount(0);
+  await expect(bar.getByRole('status')).toHaveText('1 selected');
+  await bar.getByRole('button', { name: 'Delete', exact: true }).click();
+  const bulkDeletion = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().endsWith('/api/catalog'),
+  );
+  await confirm.getByRole('button', { name: 'Permanently delete 1 image', exact: true }).click();
+  expect((await bulkDeletion).postDataJSON().deleteObjects).toHaveLength(3);
+  await expect(notice).toHaveText('Deleted 1 image.');
+  await expect(bar).toHaveCount(0);
+  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('');
+  await expect(names).toHaveCount(0);
   await page.reload();
   await page.getByRole('button', { name: 'Sign in with passkey' }).click();
   await page
     .getByLabel('Vault passphrase', { exact: true })
     .fill('a new passphrase for recovery testing');
   await page.getByRole('button', { name: 'Unlock collection', exact: true }).click();
-  await expect(names).toHaveText(['photo10.png']);
+  await expect(page.getByRole('heading', { name: 'Your collection starts here' })).toBeVisible();
+  await expect(names).toHaveCount(0);
   await expect(page.getByRole('button', { name: /^To delete|^Private walks/ })).toHaveCount(0);
   expect(external).toEqual([]);
   expect(browserErrors).toEqual([]);
