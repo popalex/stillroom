@@ -24,7 +24,21 @@ export function Icon({
   size = 20,
 }: {
   name:
-    'lock' | 'plus' | 'grid' | 'close' | 'arrow' | 'download' | 'devices' | 'in' | 'out' | 'check';
+    | 'lock'
+    | 'plus'
+    | 'grid'
+    | 'close'
+    | 'arrow'
+    | 'download'
+    | 'devices'
+    | 'in'
+    | 'out'
+    | 'check'
+    | 'search'
+    | 'sort'
+    | 'more'
+    | 'edit'
+    | 'trash';
   size?: number;
 }) {
   const paths = {
@@ -45,6 +59,22 @@ export function Icon({
     ),
     close: <path d="m6 6 12 12M18 6 6 18" />,
     check: <path d="m5 12.5 4.5 4.5L19 7.5" />,
+    search: (
+      <>
+        <circle cx="11" cy="11" r="7" />
+        <path d="m20 20-4-4" />
+      </>
+    ),
+    sort: <path d="M7 4v16m0 0-3-3m3 3 3-3M17 20V4m0 0-3 3m3-3 3 3" />,
+    more: (
+      <>
+        <circle cx="5" cy="12" r="1.2" fill="currentColor" />
+        <circle cx="12" cy="12" r="1.2" fill="currentColor" />
+        <circle cx="19" cy="12" r="1.2" fill="currentColor" />
+      </>
+    ),
+    edit: <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />,
+    trash: <path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
     in: (
       <>
         <circle cx="11" cy="11" r="7" />
@@ -86,12 +116,10 @@ export function Icon({
 export function Brand({ home }: { home?: () => void }) {
   const content = (
     <>
-      <span className="brand-mark">
-        <Icon name="grid" />
+      <span className="brand-mark" aria-hidden="true">
+        <span />
       </span>
-      <span>
-        stillroom<span className="brand-dot">.</span>
-      </span>
+      <span>stillroom</span>
     </>
   );
   return home ? (

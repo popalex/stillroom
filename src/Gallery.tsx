@@ -156,25 +156,25 @@ function Thumbnail({
       aria-label={`${selecting ? 'Select' : 'View'} ${image.name}`}
       aria-pressed={selecting ? checked : undefined}
     >
-      <div className="image-well">
-        {selecting && (
-          <span className="image-check" aria-hidden="true">
-            {checked && <Icon name="check" size={16} />}
-          </span>
-        )}
+      {selecting && (
+        <span className="image-check" aria-hidden="true">
+          {checked && <Icon name="check" size={16} />}
+        </span>
+      )}
+      <span className="image-well">
         {url ? (
           <img src={url} alt="" />
         ) : (
           <span className="image-placeholder">
-            {error ? 'Could not load preview' : <Icon name="grid" size={28} />}
+            {error ? 'Could not load preview' : <Icon name="grid" size={24} />}
           </span>
         )}
-      </div>
-      <div className="image-caption">
-        <span className="image-number">{String(index + 1).padStart(2, '0')}</span>
+      </span>
+      <span className="image-caption">
+        <span className="image-number">{String(index + 1).padStart(3, '0')}</span>
         <span className="image-name">{image.name}</span>
-        <span className="image-category">{image.category || 'Uncategorized'}</span>
-      </div>
+        <span className="image-category sr-only">{image.category || 'Uncategorized'}</span>
+      </span>
     </button>
   );
 }
@@ -255,6 +255,10 @@ export function Gallery({
   const [category, setCategory] = useState('all'),
     [search, setSearch] = useState(''),
     [selected, setSelected] = useState<string | null>(null);
+  // Phones hide the search field behind a round button until it is opened or holds
+  // a search. The category menu is a popover on desktop and a sheet on phones.
+  const [searchOpen, setSearchOpen] = useState(false),
+    [menuOpen, setMenuOpen] = useState(false);
   const [addingCategory, setAddingCategory] = useState(false),
     [newCategory, setNewCategory] = useState('');
   const [deletingCategory, setDeletingCategory] = useState<string | null>(null);
@@ -318,6 +322,13 @@ export function Gallery({
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
   const grid = useRef<HTMLDivElement>(null);
+  // On phones the categories are a sideways-scrolling chip row; bring the open
+  // one into view when it changes, including from the logo or a rename.
+  useEffect(() => {
+    document
+      .querySelector('.collection-nav .nav-item.active')
+      ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [category]);
   const shown = useGridWindow(grid, images.length, images);
   // Select mode: thumbnails toggle membership in `chosen` instead of opening the
   // viewer. Choices persist across category and search changes, so images from
@@ -545,35 +556,65 @@ export function Gallery({
         if (fileInput.current) fileInput.current.value = '';
       }
     });
+  const title =
+    category === 'all'
+      ? 'All photographs'
+      : category === 'uncategorized'
+        ? 'Uncategorized'
+        : category;
+  const deletable =
+    catalog.categories.includes(category) ||
+    (category === 'uncategorized' && catalog.images.some((image) => !image.category));
+  const closeMenu = () => setMenuOpen(false);
+  const navItem = (key: string, label: string, count: number) => (
+    <button
+      key={key}
+      className={`nav-item${category === key ? ' active' : ''}`}
+      aria-current={category === key ? 'page' : undefined}
+      onClick={() => {
+        setCategory(key);
+        closeMenu();
+      }}
+    >
+      <span className="nav-label">{label}</span>
+      <span className="nav-count">{count}</span>
+    </button>
+  );
   return (
-    <div className="workspace">
+    <div className={`workspace${selecting ? ' selecting' : ''}`}>
       <aside className="sidebar">
-        <Brand
-          home={() => {
-            setCategory('all');
-            setSearch('');
-          }}
-        />
-        <div className="sidebar-section">
-          <p className="eyebrow">COLLECTION</p>
-          <button
-            className={`nav-item ${category === 'all' ? 'active' : ''}`}
-            onClick={() => setCategory('all')}
-          >
-            <Icon name="grid" size={18} />
-            All photographs<span className="nav-count">{catalog.images.length}</span>
-          </button>
-          <button
-            className={`nav-item ${category === 'uncategorized' ? 'active' : ''}`}
-            onClick={() => setCategory('uncategorized')}
-          >
-            Uncategorized
-            <span className="nav-count">{catalog.images.filter((i) => !i.category).length}</span>
-          </button>
+        <div className="sidebar-top">
+          <Brand
+            home={() => {
+              setCategory('all');
+              setSearch('');
+            }}
+          />
+          <div className="device-actions">
+            {admin && (
+              <button
+                className="icon-button"
+                aria-label="Manage devices"
+                disabled={task.busy}
+                onClick={() => setDevices(true)}
+              >
+                <Icon name="devices" />
+              </button>
+            )}
+            <button className="icon-button" aria-label="Lock collection" onClick={onLock}>
+              <Icon name="lock" />
+            </button>
+          </div>
         </div>
-        <div className="sidebar-section categories">
-          <div className="section-label">
-            <p className="eyebrow">CATEGORIES</p>
+        <nav className="collection-nav" aria-label="Collection">
+          {navItem('all', 'All photographs', catalog.images.length)}
+          {navItem(
+            'uncategorized',
+            'Uncategorized',
+            catalog.images.filter((i) => !i.category).length,
+          )}
+          <div className="nav-heading">
+            <h2>Categories</h2>
             {admin && (
               <button
                 className="icon-button"
@@ -581,41 +622,43 @@ export function Gallery({
                 disabled={task.busy}
                 onClick={() => setAddingCategory(true)}
               >
-                <Icon name="plus" size={17} />
+                <Icon name="plus" />
               </button>
             )}
           </div>
-          {catalog.categories.map((name) => (
+          {catalog.categories.map((name) =>
+            navItem(name, name, catalog.images.filter((i) => i.category === name).length),
+          )}
+          {admin && (
             <button
-              key={name}
-              className={`nav-item ${category === name ? 'active' : ''}`}
-              onClick={() => setCategory(name)}
+              className="nav-item nav-add"
+              aria-label="Add category"
+              disabled={task.busy}
+              onClick={() => setAddingCategory(true)}
             >
-              <span className="category-dot" />
-              {name}
-              <span className="nav-count">
-                {catalog.images.filter((i) => i.category === name).length}
-              </span>
+              <Icon name="plus" size={18} />
             </button>
-          ))}
+          )}
           {!catalog.categories.length && (
-            <p className="sidebar-hint">
+            <p className="nav-hint">
               {admin ? 'Add categories to organize your photographs.' : 'No categories yet.'}
             </p>
           )}
-        </div>
+        </nav>
         <div className="sidebar-bottom">
-          <span className="device-label">{user.label}</span>
-          <span className="muted">{admin ? 'Upload & manage' : 'Viewing access'}</span>
+          <p className="device-label">
+            {user.label}
+            <span>{admin ? 'Upload & manage' : 'Viewing access'}</span>
+          </p>
           {admin && (
             <button className="nav-item" onClick={() => setDevices(true)} disabled={task.busy}>
-              <Icon name="devices" size={18} />
-              Manage devices
+              <Icon name="devices" />
+              <span className="nav-label">Manage devices</span>
             </button>
           )}
           <button className="nav-item" onClick={onLock}>
-            <Icon name="lock" size={18} />
-            Lock collection
+            <Icon name="lock" />
+            <span className="nav-label">Lock collection</span>
           </button>
         </div>
       </aside>
@@ -637,102 +680,40 @@ export function Gallery({
         }}
       >
         <header className="collection-header">
-          <div>
-            <p className="eyebrow">PRIVATE IMAGE LIBRARY</p>
-            <h1>
-              {category === 'all'
-                ? 'All photographs'
-                : category === 'uncategorized'
-                  ? 'Uncategorized'
-                  : category}
-            </h1>
-            <p className="muted">
-              {images.length} {images.length === 1 ? 'photograph' : 'photographs'}
-              {search ? ' found' : ' in your collection'}
+          <div className="collection-title">
+            <h1>{title}</h1>
+            <p className="collection-count">
+              {images.length}
+              {search ? ' found' : ''}
             </p>
           </div>
-          <div className="header-actions">
-            {admin && (
-              <button
-                className="mobile-devices icon-button"
-                aria-label="Manage devices"
-                disabled={task.busy}
-                onClick={() => setDevices(true)}
-              >
-                <Icon name="devices" />
-              </button>
-            )}
-            <button
-              className="mobile-lock icon-button"
-              aria-label="Lock collection"
-              onClick={onLock}
-            >
-              <Icon name="lock" />
-            </button>
-            {admin && (selecting || images.length > 0) && (
-              <button
-                className="secondary"
-                disabled={task.busy}
-                onClick={() => {
-                  setNotice('');
-                  if (selecting) stopSelecting();
-                  else setSelecting(true);
-                }}
-              >
-                {selecting ? 'Done' : 'Select'}
-              </button>
-            )}
-            {admin && catalog.categories.includes(category) && (
-              <button
-                className="secondary"
-                disabled={task.busy}
-                onClick={() => {
-                  task.setError('');
-                  setRenaming(category);
-                }}
-              >
-                Rename
-              </button>
-            )}
-            {admin &&
-              (catalog.categories.includes(category) ||
-                (category === 'uncategorized' &&
-                  catalog.images.some((image) => !image.category))) && (
-                <button
-                  className="secondary danger"
-                  disabled={task.busy}
-                  onClick={() => {
-                    task.setError('');
-                    setDeletingCategory(category);
-                  }}
-                >
-                  {category === 'uncategorized' ? 'Delete uncategorized' : 'Delete category'}
-                </button>
-              )}
-            {admin && (
-              <button
-                className="primary"
-                disabled={task.busy}
-                onClick={() => fileInput.current?.click()}
-              >
-                <Icon name="plus" size={18} />
-                Upload images
-              </button>
-            )}
-          </div>
-        </header>
-        <div className="collection-toolbar">
-          <label className="search-label">
+          <button
+            className="icon-button round search-toggle"
+            aria-label={searchOpen || search ? 'Close search' : 'Open search'}
+            aria-expanded={searchOpen || !!search}
+            onClick={() => {
+              if (searchOpen || search) {
+                setSearch('');
+                setSearchOpen(false);
+              } else setSearchOpen(true);
+            }}
+          >
+            <Icon name={searchOpen || search ? 'close' : 'search'} />
+          </button>
+          <label className={`search-field${searchOpen || search ? ' open' : ''}`}>
+            <Icon name="search" size={18} />
             <span className="sr-only">Search photographs</span>
             <input
               type="search"
-              placeholder="Find a photograph…"
+              placeholder="Find a photograph"
+              autoFocus={searchOpen}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </label>
-          <label className="sort-label">
-            Sort by
+          <label className="sort-field">
+            <span className="sr-only">Sort by</span>
+            <Icon name="sort" />
             <select
               value={sortOrder}
               disabled={!sortLoaded || sortTask.busy}
@@ -752,21 +733,106 @@ export function Gallery({
                 });
               }}
             >
-              <option value="date-desc">Date added: newest first</option>
-              <option value="date-asc">Date added: oldest first</option>
-              <option value="name-asc">Filename: A to Z</option>
-              <option value="name-desc">Filename: Z to A</option>
+              <option value="date-desc">Newest first</option>
+              <option value="date-asc">Oldest first</option>
+              <option value="name-asc">Name, A to Z</option>
+              <option value="name-desc">Name, Z to A</option>
             </select>
           </label>
-          <span className="private-indicator">
-            <span />
-            Unlocked on this device
-          </span>
-        </div>
+          {admin && !selecting && (
+            // One set of actions: in the header with a mouse or trackpad, a dock at
+            // the bottom of the screen on touch screens and phones.
+            <div className="gallery-actions" role="toolbar" aria-label="Gallery actions">
+              {images.length > 0 && (
+                <button
+                  className="secondary"
+                  disabled={task.busy}
+                  onClick={() => {
+                    setNotice('');
+                    setSelecting(true);
+                    closeMenu();
+                  }}
+                >
+                  Select
+                </button>
+              )}
+              {deletable && (
+                <span className="menu-anchor">
+                  <button
+                    className="icon-button round"
+                    aria-label={`More actions for ${title}`}
+                    aria-haspopup="menu"
+                    aria-expanded={menuOpen}
+                    disabled={task.busy}
+                    onClick={() => setMenuOpen(!menuOpen)}
+                  >
+                    <Icon name="more" />
+                  </button>
+                  {menuOpen && (
+                    <>
+                      <span className="menu-backdrop" onClick={closeMenu} />
+                      <span
+                        className="menu"
+                        role="menu"
+                        aria-label={title}
+                        onKeyDown={(e) => e.key === 'Escape' && closeMenu()}
+                      >
+                        <span className="menu-title">
+                          {title}, {plural(images.length)}
+                        </span>
+                        {catalog.categories.includes(category) && (
+                          <button
+                            role="menuitem"
+                            autoFocus
+                            onClick={() => {
+                              closeMenu();
+                              task.setError('');
+                              setRenaming(category);
+                            }}
+                          >
+                            <Icon name="edit" />
+                            Rename
+                          </button>
+                        )}
+                        <button
+                          role="menuitem"
+                          className="danger"
+                          autoFocus={!catalog.categories.includes(category)}
+                          onClick={() => {
+                            closeMenu();
+                            task.setError('');
+                            setDeletingCategory(category);
+                          }}
+                        >
+                          <Icon name="trash" />
+                          {category === 'uncategorized'
+                            ? 'Delete uncategorized'
+                            : 'Delete category'}
+                        </button>
+                        <button className="menu-cancel" onClick={closeMenu}>
+                          Cancel
+                        </button>
+                      </span>
+                    </>
+                  )}
+                </span>
+              )}
+              <button
+                className="primary"
+                aria-label="Upload images"
+                disabled={task.busy}
+                onClick={() => fileInput.current?.click()}
+              >
+                <Icon name="plus" size={18} />
+                Upload
+              </button>
+            </div>
+          )}
+        </header>
         {!selecting && <ErrorNotice error={task.error} />}
         <ErrorNotice error={sortLoadError || sortTask.error} />
         {pendingDeletions > 0 && (
-          <p role="alert">
+          <p role="alert" className="notice-strip">
             Removed from the gallery, but {pendingDeletions} encrypted files still need deletion.
             The server retries every 30 seconds. Check storage permissions if this message persists.
           </p>
@@ -795,28 +861,30 @@ export function Gallery({
           </div>
         )}
         {images.length ? (
-          <div
-            ref={grid}
-            className={`image-grid${selecting ? ' selecting' : ''}`}
-            style={{ paddingTop: shown.before, paddingBottom: shown.after }}
-          >
-            {images.slice(shown.start, shown.end).map((image, offset) => (
-              <Thumbnail
-                key={image.id}
-                image={image}
-                index={shown.start + offset}
-                vault={initial.vault}
-                open={() => setSelected(image.id)}
-                selecting={selecting}
-                checked={chosen.has(image.id)}
-                pick={(range) => pick(image.id, range)}
-              />
-            ))}
-          </div>
+          <section className="light-table" aria-label="Photographs">
+            <div
+              ref={grid}
+              className={`image-grid${selecting ? ' selecting' : ''}`}
+              style={{ paddingTop: shown.before, paddingBottom: shown.after }}
+            >
+              {images.slice(shown.start, shown.end).map((image, offset) => (
+                <Thumbnail
+                  key={image.id}
+                  image={image}
+                  index={shown.start + offset}
+                  vault={initial.vault}
+                  open={() => setSelected(image.id)}
+                  selecting={selecting}
+                  checked={chosen.has(image.id)}
+                  pick={(range) => pick(image.id, range)}
+                />
+              ))}
+            </div>
+          </section>
         ) : (
           <div className="empty-state">
-            <div className="empty-sheet" aria-hidden="true">
-              <Icon name="grid" size={48} />
+            <div className="empty-mount" aria-hidden="true">
+              <Icon name={search ? 'search' : 'grid'} size={32} />
             </div>
             <h2>
               {search
@@ -827,23 +895,31 @@ export function Gallery({
             </h2>
             <p>
               {search
-                ? 'Try a different filename or category.'
+                ? `Nothing matches "${search}" here.`
                 : admin
                   ? finePointer
                     ? 'Drop photographs here, or choose files from this device.'
                     : 'Choose photographs from this device to add them here.'
                   : 'Upload photographs from your upload PC to see them here.'}
             </p>
-            {admin && !search && (
-              <button
-                className="secondary"
-                disabled={task.busy}
-                onClick={() => fileInput.current?.click()}
-              >
-                Choose images
+            {search ? (
+              <button className="secondary" onClick={() => setSearch('')}>
+                Clear search
               </button>
+            ) : (
+              admin && (
+                <>
+                  <button
+                    className="primary"
+                    disabled={task.busy}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    Choose images
+                  </button>
+                  <span className="format-hint">JPEG, PNG or WebP, up to 25 MiB each</span>
+                </>
+              )
             )}
-            <span className="format-hint">JPEG, PNG, WebP · Up to 25 MiB per image</span>
           </div>
         )}
         {selecting && (
@@ -861,43 +937,56 @@ export function Gallery({
               });
             }}
           >
-            <p className="selection-count" role="status">
-              {chosenCount} selected
-            </p>
-            <button type="button" disabled={task.busy || !images.length} onClick={chooseAll}>
-              Select all
-            </button>
-            <button
-              type="button"
-              disabled={task.busy || !chosenCount}
-              onClick={() => setChosen(new Set())}
-            >
-              Clear
-            </button>
-            <CategoryPicker
-              categories={catalog.categories}
-              choice={moveChoice}
-              disabled={task.busy}
-              label="Move to"
-              onChange={(next) => {
-                if (next.creating !== moveChoice.creating) task.setError('');
-                setMoveChoice(next);
-              }}
-            />
-            <button className="primary" disabled={task.busy || !chosenCount}>
-              Move
-            </button>
-            <button
-              type="button"
-              className="danger"
-              disabled={task.busy || !chosenCount}
-              onClick={() => {
-                task.setError('');
-                setDeletingChosen(true);
-              }}
-            >
-              Delete
-            </button>
+            <div className="selection-row">
+              <p className="selection-count" role="status">
+                {chosenCount} selected
+              </p>
+              <button type="button" disabled={task.busy || !images.length} onClick={chooseAll}>
+                Select all
+              </button>
+              <button
+                type="button"
+                disabled={task.busy || !chosenCount}
+                onClick={() => setChosen(new Set())}
+              >
+                Clear
+              </button>
+              <button
+                type="button"
+                className="secondary selection-done"
+                aria-label="Done"
+                onClick={stopSelecting}
+              >
+                <Icon name="check" size={18} />
+                <span>Done</span>
+              </button>
+            </div>
+            <div className="selection-row">
+              <CategoryPicker
+                categories={catalog.categories}
+                choice={moveChoice}
+                disabled={task.busy}
+                label="Move to"
+                onChange={(next) => {
+                  if (next.creating !== moveChoice.creating) task.setError('');
+                  setMoveChoice(next);
+                }}
+              />
+              <button className="primary" disabled={task.busy || !chosenCount}>
+                Move
+              </button>
+              <button
+                type="button"
+                className="secondary danger"
+                disabled={task.busy || !chosenCount}
+                onClick={() => {
+                  task.setError('');
+                  setDeletingChosen(true);
+                }}
+              >
+                Delete
+              </button>
+            </div>
             <div className="details-error">
               <ErrorNotice error={task.error} />
             </div>
@@ -909,10 +998,6 @@ export function Gallery({
             {notice}
           </p>
         )}
-        <footer className="collection-footer">
-          <span>STILLROOM / PERSONAL ARCHIVE</span>
-          <span>Images unlock only on your devices.</span>
-        </footer>
         <input
           ref={fileInput}
           disabled={task.busy}

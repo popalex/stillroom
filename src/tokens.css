@@ -1,21 +1,90 @@
+/* Lightbox: slides in square mounts on a glowing light table. One blue marks
+   selection; everything else is ink, white plastic and the lit table. The
+   photos are the only saturated colour on screen. */
 :root {
-  --paper: #f5f7f8;
-  --white: #ffffff;
-  --ink: #21323d;
-  --muted: #687c89;
-  --line: #d8e0e5;
-  --wash: #e9eff2;
-  --navy: #213847;
-  --navy-light: #304c5d;
-  --navy-frame: #456271;
-  --nav-muted: #a5bcc9;
-  --teal: #386c73;
-  --teal-dark: #2c5960;
-  --sea: #a0c9c8;
-  --focus: #71a9ba;
-  --danger: #a64040;
-  --error-bg: #fff1f0;
-  --error-border: #e7c5c1;
-  --body: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
-  --utility: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  color-scheme: light dark;
+
+  /* Lamp on. */
+  --room: #eef1f4;
+  --table: #fdfeff;
+  --table-grid: #edf1f5;
+  --table-edge: #dde3e9;
+  --table-glow: 0 0 40px rgb(220 232 245 / 0.9);
+  --surface: #ffffff;
+  --mount: #ffffff;
+  --mount-edge: #d9dfe5;
+  --line: #d9dfe5;
+  --line-strong: #c9d1d9;
+  --ink: #1b232c;
+  --ink-soft: #3a4652;
+  --muted: #5b6875;
+  --mount-number: #66727f;
+  --on-ink: #ffffff;
+  --select: #2f62d9;
+  --select-soft: #b9ccf5;
+  --danger: #b3261e;
+  --danger-wash: #fdeceb;
+  --scrim: rgb(27 35 44 / 0.38);
+  --shadow-mount: 0 1px 2px rgb(27 35 44 / 0.14);
+  --shadow-float: 0 10px 30px rgb(27 35 44 / 0.18);
+  --shadow-sheet: 0 -10px 40px rgb(27 35 44 / 0.25);
+  --photo-shadow: drop-shadow(0 1px 1.5px rgb(27 35 44 / 0.35));
+  /* The viewer is a darkroom in both themes, so photos keep their contrast. */
+  --viewer-room: #171b20;
+  --viewer-ink: #e6ebf0;
+  --viewer-control: rgb(255 255 255 / 0.14);
+  --viewer-control-edge: rgb(255 255 255 / 0.35);
+
+  --font: 'Hanken Grotesk Variable', system-ui, sans-serif;
+  /* Six sizes and nothing under 12px. */
+  --text-label: 12px;
+  --text-small: 14px;
+  --text-body: 16px;
+  --text-count: 20px;
+  --text-title: 30px;
+  --text-display: 44px;
+
+  --radius-pill: 22px;
+  --radius-mount: 9px;
+  --radius-table: 16px;
+  --radius-sheet: 26px;
+  --target: 44px;
+
+  /* Motion: three durations, one curve for arriving and one for leaving. */
+  --fast: 120ms;
+  --base: 200ms;
+  --slow: 280ms;
+  --arrive: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --leave: cubic-bezier(0.4, 0, 1, 1);
+}
+
+/* Lamp off. The room goes darker than the table so the table still reads as
+   lit, and mounts stay darker than any photo. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --room: #171b20;
+    --table: #232a31;
+    --table-grid: #2a3139;
+    --table-edge: #343d47;
+    --table-glow: 0 0 70px rgb(126 162 255 / 0.12);
+    --surface: #232a31;
+    --mount: #323a43;
+    --mount-edge: #46505b;
+    --line: #343d47;
+    --line-strong: #46505b;
+    --ink: #e6ebf0;
+    --ink-soft: #c9d1d9;
+    --muted: #a9b4bf;
+    --mount-number: #a9b4bf;
+    --on-ink: #171b20;
+    --select: #7ea2ff;
+    --select-soft: #33456f;
+    --danger: #ff8a80;
+    --danger-wash: #3a2224;
+    --scrim: rgb(0 0 0 / 0.55);
+    --shadow-mount: 0 1px 2px rgb(0 0 0 / 0.4);
+    --shadow-float: 0 10px 30px rgb(0 0 0 / 0.45);
+    --shadow-sheet: 0 -10px 40px rgb(0 0 0 / 0.5);
+    --photo-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+  }
 }
