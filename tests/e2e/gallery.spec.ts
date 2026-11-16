@@ -304,7 +304,12 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/bulk-move-mobile.png' });
   await bar.getByRole('button', { name: 'Move', exact: true }).click();
-  await expect(bar.getByRole('status')).toHaveText('Moved 2 images to Trips.');
+  // A move ends select mode and says where the images went.
+  const notice = page.locator('.move-notice');
+  await expect(notice).toHaveText('Moved 2 images to Trips.');
+  await page.screenshot({ path: 'test-results/bulk-move-notice-mobile.png' });
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'View alpha.png', exact: true })).toBeVisible();
   expect(catalogWrites).toBe(1);
   await expect(page.getByRole('button', { name: /^Trips/ })).toContainText('2');
   await expect(page.locator('.image-card .image-category')).toHaveText([
@@ -312,21 +317,26 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
     'Uncategorized',
     'Trips',
   ]);
-  // Select all in the Trips view, then move back with an existing category.
+  // Esc leaves select mode. Then select all in the Trips view and move back to
+  // an existing category.
   await page.getByRole('button', { name: /^Trips/ }).click();
   await expect(names).toHaveText(['alpha.png', 'photo10.png']);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await expect(notice).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
   await page.keyboard.press('ControlOrMeta+a');
   await expect(bar.getByRole('status')).toHaveText('2 selected');
   await bar.getByRole('combobox', { name: 'Move to', exact: true }).selectOption('');
   await page.setViewportSize({ width: 1280, height: 640 });
   await page.screenshot({ path: 'test-results/bulk-move-desktop.png' });
   await bar.getByRole('button', { name: 'Move', exact: true }).click();
-  await expect(bar.getByRole('status')).toHaveText('Moved 2 images to Uncategorized.');
+  await expect(notice).toHaveText('Moved 2 images to Uncategorized.');
+  await expect(bar).toHaveCount(0);
   expect(catalogWrites).toBe(2);
   await expect(names).toHaveCount(0);
-  await page.keyboard.press('Escape');
-  await expect(bar).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Select', exact: true })).toBeVisible();
+  await expect(notice).toHaveCount(0, { timeout: 6000 });
   await page.getByRole('button', { name: 'Delete category', exact: true }).click();
   await page.getByRole('button', { name: 'Permanently delete category', exact: true }).click();
   await expect(page.getByRole('button', { name: /^Trips/ })).toHaveCount(0);
