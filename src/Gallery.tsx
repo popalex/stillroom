@@ -412,7 +412,12 @@ export function Gallery({
   return (
     <div className="workspace">
       <aside className="sidebar">
-        <Brand />
+        <Brand
+          home={() => {
+            setCategory('all');
+            setSearch('');
+          }}
+        />
         <div className="sidebar-section">
           <p className="eyebrow">COLLECTION</p>
           <button
