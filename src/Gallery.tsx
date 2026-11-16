@@ -332,19 +332,22 @@ export function Gallery({
       return next;
     });
     anchor.current = id;
-    setMoved('');
   };
-  const chooseAll = () => {
+  const chooseAll = () =>
     setChosen((current) => new Set([...current, ...images.map((image) => image.id)]));
-    setMoved('');
-  };
   const stopSelecting = () => {
     setSelecting(false);
     setChosen(new Set());
     anchor.current = null;
-    setMoved('');
     task.setError('');
   };
+  // The notice after a move replaces the bar at the bottom of the screen, where
+  // the person was looking, and fades on its own.
+  useEffect(() => {
+    if (!moved) return;
+    const timer = setTimeout(() => setMoved(''), 4000);
+    return () => clearTimeout(timer);
+  }, [moved]);
   useEffect(() => {
     if (!selecting) return;
     const handle = (event: KeyboardEvent) => {
@@ -650,7 +653,11 @@ export function Gallery({
               <button
                 className="secondary"
                 disabled={task.busy}
-                onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                onClick={() => {
+                  setMoved('');
+                  if (selecting) stopSelecting();
+                  else setSelecting(true);
+                }}
               >
                 {selecting ? 'Done' : 'Select'}
               </button>
@@ -810,8 +817,7 @@ export function Gallery({
               void task.run(async () => {
                 const { category, added } = resolveChoice(moveChoice, catalog.categories);
                 await save(moveImages(catalog, chosen, category, added));
-                setChosen(new Set());
-                anchor.current = null;
+                stopSelecting();
                 setMoveChoice({ category, creating: false, newName: '' });
                 setMoved(
                   `Moved ${chosenCount} ${chosenCount === 1 ? 'image' : 'images'} to ${
@@ -822,7 +828,7 @@ export function Gallery({
             }}
           >
             <p className="selection-count" role="status">
-              {moved || `${chosenCount} selected`}
+              {chosenCount} selected
             </p>
             <button type="button" disabled={task.busy || !images.length} onClick={chooseAll}>
               Select all
@@ -830,10 +836,7 @@ export function Gallery({
             <button
               type="button"
               disabled={task.busy || !chosenCount}
-              onClick={() => {
-                setChosen(new Set());
-                setMoved('');
-              }}
+              onClick={() => setChosen(new Set())}
             >
               Clear
             </button>
@@ -854,6 +857,12 @@ export function Gallery({
               <ErrorNotice error={task.error} />
             </div>
           </form>
+        )}
+        {moved && (
+          <p className="move-notice" role="status">
+            <Icon name="check" size={16} />
+            {moved}
+          </p>
         )}
         <footer className="collection-footer">
           <span>STILLROOM / PERSONAL ARCHIVE</span>
