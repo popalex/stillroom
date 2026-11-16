@@ -5,9 +5,11 @@ The first implementation includes passkey enrollment and login, device permissio
 1. Run locally with Node.js 24 and pnpm 11.5.2.
 
    ```sh
-   pnpm install --frozen-lockfile
-   pnpm dev
+   make install
+   make dev
    ```
+
+   The Makefile wraps the pnpm scripts and Docker Compose commands this README uses. Run `make` to list every target. The pnpm commands still work directly: `make install` runs `pnpm install --frozen-lockfile`, and `make dev` runs `pnpm dev`.
 
    Open http://localhost:5173. The initial enrollment code is in `data/bootstrap-token`. Read that file locally, enter its contents on the setup page, name the upload device, and create a passkey. The code becomes unusable after the first enrollment. Server output does not print the code.
 
@@ -55,15 +57,15 @@ The first implementation includes passkey enrollment and login, device permissio
    Open the login URL in the logs and authorize `stillroom` in your Tailscale account. This is a one-time browser login; no auth key needs to be stored in `.env`. If your tailnet requires device approval, approve the new node in the admin console too. Check that login has completed:
 
    ```sh
-   docker compose exec tailscale tailscale status
+   make status
    ```
 
    Generate the app configuration and start the gallery:
 
    ```sh
-   pnpm setup:tailscale
+   make setup-tailscale
    sudo install -d -m 700 -o 1000 -g 1000 data-tailscale
-   docker compose up -d --build
+   make up
    ```
 
    The setup command reads the container's actual Tailscale hostname and writes `.env` with mode 0600. It prints the HTTPS address to open, usually `https://stillroom.<your-tailnet>.ts.net`. Use that exact address on every device. It is different from the host PC's previous address. The command refuses to overwrite an existing `.env`; if one exists from the earlier setup, move it aside or update its `APP_ORIGIN` to the container's hostname. `PROXY_SECRET` is no longer used.
@@ -85,15 +87,16 @@ The first implementation includes passkey enrollment and login, device permissio
    If the site does not open, inspect:
 
    ```sh
-   docker compose ps
-   docker compose logs --tail=50 tailscale viewer
-   docker compose exec tailscale tailscale status
-   docker compose exec tailscale tailscale serve status
+   make ps
+   make status
+   make logs
    ```
+
+   `make status` shows `tailscale status` and `tailscale serve status`. `make logs` follows the last 50 lines from both containers; press Ctrl+C to stop following.
 
    A pending login or device approval prevents startup. Missing HTTPS support usually means MagicDNS or HTTPS certificates need enabling in Tailscale. An origin error means `.env` does not match the container's actual hostname. After changing `.env`, recreate the viewer with `docker compose up -d viewer`.
 
-   On later starts and after application changes, use `docker compose up -d --build`. Tailscale's identity persists in the `tailscale-state` Docker volume; keep that volume when stopping the stack. `docker compose down` preserves it, while `docker compose down -v` deletes it and requires a new Tailscale login. The image is pinned by digest; update the digest when upgrading Tailscale, then recreate both services together.
+   On later starts and after application changes, use `make up`. Tailscale's identity persists in the `tailscale-state` Docker volume; keep that volume when stopping the stack. `make down` preserves it, while `docker compose down -v` deletes it and requires a new Tailscale login. The image is pinned by digest; update the digest when upgrading Tailscale, then recreate both services together.
 
    If you followed the old Caddy instructions solely for this gallery, stop that unused service with `sudo systemctl disable --now caddy`. Leave it running if it serves other sites. The new containers do not depend on its files or the old certificate-permission setting.
 
@@ -110,10 +113,10 @@ The first implementation includes passkey enrollment and login, device permissio
 5. Back up and recover.
 
    ```sh
-   pnpm backup /path/on/encrypted-storage/new-backup-directory
+   make backup DIR=/path/on/encrypted-storage/new-backup-directory
    ```
 
-   For the Tailscale deployment, run `DATA_DIR=./data-tailscale pnpm backup /path/on/encrypted-storage/new-backup-directory`. The backup command does not load `.env` automatically. Set `DATA_DIR` when using another source directory. The command uses SQLite's backup API, copies the current catalog's immutable encrypted objects, removes sessions and pending enrollment codes from the snapshot, and writes a SHA-256 manifest. A complete snapshot has `manifest.json`. An interrupted snapshot should be discarded and recreated at a new destination. Backups and permanent deletion share a lock so files cannot disappear while a snapshot copies them. A concurrent deletion asks you to retry.
+   For the Tailscale deployment, run `make backup DIR=/path/on/encrypted-storage/new-backup-directory DATA_DIR=./data-tailscale`. The backup command does not load `.env` automatically. Set `DATA_DIR` when using another source directory. The command uses SQLite's backup API, copies the current catalog's immutable encrypted objects, removes sessions and pending enrollment codes from the snapshot, and writes a SHA-256 manifest. A complete snapshot has `manifest.json`. An interrupted snapshot should be discarded and recreated at a new destination. Backups and permanent deletion share a lock so files cannot disappear while a snapshot copies them. A concurrent deletion asks you to retry.
 
    Images and catalog contents in the snapshot are encrypted. Credential public keys, device labels, roles, addresses, and object sizes are not application-encrypted. Keep the entire backup on encrypted storage, or encrypt it separately before sending it offsite. The manifest detects accidental corruption; it is not a signature against an attacker replacing the backup.
 
@@ -126,15 +129,14 @@ The first implementation includes passkey enrollment and login, device permissio
 6. Verify changes.
 
    ```sh
-   pnpm build
-   pnpm test
-   pnpm exec playwright install chromium
-   pnpm test:e2e
+   make check
    ```
+
+   That runs the Prettier check, the build, the browser test and the unit tests. `make test` runs only the unit tests. `make e2e` builds first, because the browser test serves `dist/`, and installs the Chromium build that the current Playwright version expects.
 
    Unit tests cover access boundaries, session revocation, catalog conflicts, ciphertext authentication, key recovery, and KDF bounds. The browser test uses virtual authenticators with Chromium, uploads an image, opens it from a separate mobile-sized browser context, downloads the original, and recovers the vault. It does not replace testing your actual PC, phone, passkey provider, or Tailscale deployment.
 
-   GitHub Actions runs these steps, plus `pnpm format:check` and a Docker image build, on every pull request, including Dependabot's. `main` accepts a merge only after both CI jobs pass.
+   GitHub Actions runs the same checks, plus a Docker image build, on every pull request, including Dependabot's. `main` accepts a merge only after both CI jobs pass.
 
 The server delivers the website's JavaScript. A compromised server could modify that code to capture keys during a future unlock. Browser encryption protects stored content, but it cannot remove this trust in the website host. The architecture and its limits are recorded in [PLAN.md](PLAN.md) and [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md).
 
