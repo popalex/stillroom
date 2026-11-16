@@ -30,9 +30,13 @@ button {
     background 0.15s,
     border-color 0.15s;
 }
-button:hover {
-  background: var(--wash);
-  border-color: var(--muted);
+/* Touch screens keep :hover applied after a tap, which left a tapped button or
+   nav item highlighted on iPad. Hover styles apply only where a pointer hovers. */
+@media (hover: hover) {
+  button:hover {
+    background: var(--wash);
+    border-color: var(--muted);
+  }
 }
 button:disabled {
   cursor: default;
@@ -121,9 +125,11 @@ h2 {
   border-color: var(--teal);
   font-weight: 600;
 }
-.primary:hover {
-  background: var(--teal-dark);
-  border-color: var(--teal-dark);
+@media (hover: hover) {
+  .primary:hover {
+    background: var(--teal-dark);
+    border-color: var(--teal-dark);
+  }
 }
 .secondary {
   background: transparent;
@@ -141,9 +147,11 @@ h2 {
   padding: 15px 0 0;
   margin-right: 20px;
 }
-.text-button:hover {
-  background: transparent;
-  text-decoration: underline;
+@media (hover: hover) {
+  .text-button:hover {
+    background: transparent;
+    text-decoration: underline;
+  }
 }
 .icon-button {
   padding: 8px;
@@ -157,9 +165,11 @@ h2 {
   background: var(--danger);
   border-color: var(--danger);
 }
-.primary.destructive:hover {
-  background: #873434;
-  border-color: #873434;
+@media (hover: hover) {
+  .primary.destructive:hover {
+    background: #873434;
+    border-color: #873434;
+  }
 }
 .dialog-actions {
   display: flex;
@@ -354,9 +364,11 @@ h2 {
 .section-label .eyebrow {
   margin: 0;
 }
-.sidebar .icon-button:hover {
-  background: var(--navy-light);
-  border-color: transparent;
+@media (hover: hover) {
+  .sidebar .icon-button:hover {
+    background: var(--navy-light);
+    border-color: transparent;
+  }
 }
 .nav-item {
   width: 100%;
@@ -375,9 +387,11 @@ h2 {
   font-family: var(--utility);
   font-size: 10px;
 }
-.nav-item:hover {
-  background: var(--navy-light);
-  border-color: transparent;
+@media (hover: hover) {
+  .nav-item:hover {
+    background: var(--navy-light);
+    border-color: transparent;
+  }
 }
 .nav-item.active {
   background: var(--navy-light);
@@ -622,8 +636,10 @@ h2 {
   padding: 8px;
   transition: transform 0.2s;
 }
-.image-card:hover img {
-  transform: scale(1.025);
+@media (hover: hover) {
+  .image-card:hover img {
+    transform: scale(1.025);
+  }
 }
 .image-placeholder {
   color: var(--muted);
