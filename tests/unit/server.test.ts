@@ -198,6 +198,7 @@ describe('private API', () => {
     expect((await app.inject({ url: '/api/preferences', headers: viewerHeaders })).json()).toEqual({
       sortOrder: 'date-desc',
       theme: 'system',
+      gridSize: 'medium',
     });
     for (const sortOrder of ['name-asc', 'name-desc', 'date-asc', 'date-desc']) {
       const response = await app.inject({
@@ -207,7 +208,7 @@ describe('private API', () => {
         payload: { sortOrder },
       });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ sortOrder, theme: 'system' });
+      expect(response.json()).toEqual({ sortOrder, theme: 'system', gridSize: 'medium' });
     }
     await app.inject({
       method: 'PUT',
@@ -218,6 +219,7 @@ describe('private API', () => {
     expect((await app.inject({ url: '/api/preferences', headers: headers() })).json()).toEqual({
       sortOrder: 'date-desc',
       theme: 'system',
+      gridSize: 'medium',
     });
     expect((await app.inject({ url: '/api/vault', headers: headers() })).json()).toEqual(before);
     await app.close();
@@ -231,33 +233,43 @@ describe('private API', () => {
     expect((await app.inject({ url: '/api/preferences', headers: viewerHeaders })).json()).toEqual({
       sortOrder: 'name-asc',
       theme: 'system',
+      gridSize: 'medium',
     });
   });
-  it('saves the appearance per credential without resetting the sort order', async () => {
+  it('saves the appearance and thumbnail size per credential without resetting the sort order', async () => {
     const put = (payload: object, extra = headers()) =>
       app.inject({ method: 'PUT', url: '/api/preferences', headers: extra, payload });
     await put({ sortOrder: 'name-desc' });
     for (const theme of ['dark', 'light', 'system']) {
       const response = await put({ theme });
       expect(response.statusCode).toBe(200);
-      expect(response.json()).toEqual({ sortOrder: 'name-desc', theme });
+      expect(response.json()).toEqual({ sortOrder: 'name-desc', theme, gridSize: 'medium' });
     }
     await put({ theme: 'dark' });
     await put({ sortOrder: 'date-asc' });
     expect((await app.inject({ url: '/api/preferences', headers: headers() })).json()).toEqual({
       sortOrder: 'date-asc',
       theme: 'dark',
+      gridSize: 'medium',
     });
+    for (const gridSize of ['small', 'large', 'medium']) {
+      const response = await put({ gridSize });
+      expect(response.json()).toEqual({ sortOrder: 'date-asc', theme: 'dark', gridSize });
+    }
     // Another device keeps its own appearance.
     expect(
       (
         await app.inject({ url: '/api/preferences', headers: headers(viewerToken, '100.80.0.2') })
       ).json().theme,
     ).toBe('system');
-    for (const payload of [{ theme: 'sepia' }, { theme: 'dark', colour: 'red' }])
+    for (const payload of [
+      { theme: 'sepia' },
+      { theme: 'dark', colour: 'red' },
+      { gridSize: 'huge' },
+    ])
       expect((await put(payload)).statusCode).toBe(400);
   });
-  it('adds the appearance column to a database from before it existed', async () => {
+  it('adds the appearance and size columns to a database from before they existed', async () => {
     await app.close();
     const old = mkdtempSync(join(tmpdir(), 'stillroom-old-'));
     try {
@@ -272,11 +284,14 @@ describe('private API', () => {
       `);
       raw.close();
       const db = openStore(old);
-      expect(db.prepare('SELECT sort_order, theme FROM device_preferences').all()).toEqual([
-        { sort_order: 'name-asc', theme: 'system' },
-      ]);
+      expect(
+        db.prepare('SELECT sort_order, theme, grid_size FROM device_preferences').all(),
+      ).toEqual([{ sort_order: 'name-asc', theme: 'system', grid_size: 'medium' }]);
       expect(db.pragma('user_version', { simple: true })).toBe(4);
       expect(() => db.prepare("UPDATE device_preferences SET theme='sepia'").run()).toThrow(
+        /CHECK/,
+      );
+      expect(() => db.prepare("UPDATE device_preferences SET grid_size='huge'").run()).toThrow(
         /CHECK/,
       );
       db.close();
