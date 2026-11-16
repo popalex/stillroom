@@ -41,7 +41,9 @@ export function Icon({
     | 'trash'
     | 'sun'
     | 'moon'
-    | 'contrast';
+    | 'contrast'
+    | 'size-small'
+    | 'size-large';
   size?: number;
 }) {
   const paths = {
@@ -85,6 +87,20 @@ export function Icon({
       </>
     ),
     moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />,
+    'size-small': (
+      <>
+        <rect x="3" y="3" width="4.5" height="4.5" rx="1" />
+        <rect x="9.75" y="3" width="4.5" height="4.5" rx="1" />
+        <rect x="16.5" y="3" width="4.5" height="4.5" rx="1" />
+        <rect x="3" y="9.75" width="4.5" height="4.5" rx="1" />
+        <rect x="9.75" y="9.75" width="4.5" height="4.5" rx="1" />
+        <rect x="16.5" y="9.75" width="4.5" height="4.5" rx="1" />
+        <rect x="3" y="16.5" width="4.5" height="4.5" rx="1" />
+        <rect x="9.75" y="16.5" width="4.5" height="4.5" rx="1" />
+        <rect x="16.5" y="16.5" width="4.5" height="4.5" rx="1" />
+      </>
+    ),
+    'size-large': <rect x="4" y="4" width="16" height="16" rx="2" />,
     contrast: (
       <>
         <circle cx="12" cy="12" r="8" />
