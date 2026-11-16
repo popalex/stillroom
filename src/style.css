@@ -1055,7 +1055,8 @@ dialog::backdrop {
     flex-direction: column;
     align-items: flex-end;
   }
-  .header-actions .primary {
+  .header-actions .primary,
+  .header-actions .secondary {
     font-size: 11px;
     padding: 10px;
   }
