@@ -47,3 +47,16 @@ export function deleteImages(catalog: Catalog, ids: ReadonlySet<string>) {
     objects: doomed.flatMap((image) => [image.original.id, image.thumbnail.id, image.preview.id]),
   };
 }
+
+// Renames category `from` to `to` in the category list, keeping its place, and
+// on every image in it. Check `to` with categoryName against the other
+// categories, without `from`, so a rename can change only the capitalisation.
+export function renameCategory(catalog: Catalog, from: string, to: string): Catalog {
+  return {
+    ...catalog,
+    categories: catalog.categories.map((name) => (name === from ? to : name)),
+    images: catalog.images.map((image) =>
+      image.category === from ? { ...image, category: to } : image,
+    ),
+  };
+}

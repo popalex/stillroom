@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Catalog, ImageEntry } from '../../shared/protocol';
-import { categoryName, deleteImages, moveImages, resolveChoice } from '../../src/categories';
+import {
+  categoryName,
+  deleteImages,
+  moveImages,
+  renameCategory,
+  resolveChoice,
+} from '../../src/categories';
 
 const image = (id: string, category: string) =>
   ({
@@ -80,5 +86,24 @@ describe('deleting images', () => {
     const { catalog: left, objects } = deleteImages(catalog, new Set());
     expect(left.images).toEqual(catalog.images);
     expect(objects).toEqual([]);
+  });
+});
+
+describe('renaming a category', () => {
+  it('renames the category in place and moves its images with it', () => {
+    const renamed = renameCategory(catalog, 'Walks', 'Long walks');
+    expect(renamed.categories).toEqual(['Long walks', 'Trips']);
+    expect(categories(renamed)).toEqual([
+      ['a', ''],
+      ['b', 'Long walks'],
+      ['c', 'Long walks'],
+      ['d', 'Trips'],
+    ]);
+    expect(catalog.categories).toEqual(['Walks', 'Trips']);
+  });
+  it('allows a change of capitalisation only', () => {
+    const others = catalog.categories.filter((name) => name !== 'Walks');
+    const to = categoryName(' walks ', others);
+    expect(renameCategory(catalog, 'Walks', to).categories).toEqual(['walks', 'Trips']);
   });
 });
