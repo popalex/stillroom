@@ -22,6 +22,7 @@ import {
   categoryName,
   deleteImages,
   moveImages,
+  renameCategory,
   resolveChoice,
   type CategoryChoice,
 } from './categories';
@@ -256,6 +257,7 @@ export function Gallery({
   const [addingCategory, setAddingCategory] = useState(false),
     [newCategory, setNewCategory] = useState('');
   const [deletingCategory, setDeletingCategory] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
   const [devices, setDevices] = useState(false),
     [progress, setProgress] = useState(''),
     [share, setShare] = useState(0),
@@ -671,6 +673,18 @@ export function Gallery({
                 {selecting ? 'Done' : 'Select'}
               </button>
             )}
+            {admin && catalog.categories.includes(category) && (
+              <button
+                className="secondary"
+                disabled={task.busy}
+                onClick={() => {
+                  task.setError('');
+                  setRenaming(category);
+                }}
+              >
+                Rename
+              </button>
+            )}
             {admin &&
               (catalog.categories.includes(category) ||
                 (category === 'uncategorized' &&
@@ -1003,6 +1017,41 @@ export function Gallery({
                   : 'Permanently delete category'}
             </button>
           </div>
+        </Dialog>
+      )}
+      {renaming !== null && (
+        <Dialog title="Rename category" onClose={() => !task.busy && setRenaming(null)}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              void task.run(async () => {
+                const from = category;
+                const to = categoryName(
+                  renaming,
+                  catalog.categories.filter((name) => name !== from),
+                );
+                if (to !== from) await save(renameCategory(catalog, from, to));
+                setCategory(to);
+                setRenaming(null);
+              });
+            }}
+          >
+            <label>
+              New name for "{category}"
+              <input
+                autoFocus
+                value={renaming}
+                maxLength={80}
+                onChange={(e) => setRenaming(e.target.value)}
+                onFocus={(e) => e.currentTarget.select()}
+                required
+              />
+            </label>
+            <ErrorNotice error={task.error} />
+            <button className="primary wide" disabled={task.busy}>
+              Rename category
+            </button>
+          </form>
         </Dialog>
       )}
       {addingCategory && (
