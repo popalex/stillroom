@@ -699,7 +699,7 @@ export function Gallery({
                 (category === 'uncategorized' &&
                   catalog.images.some((image) => !image.category))) && (
                 <button
-                  className="primary destructive"
+                  className="secondary danger"
                   disabled={task.busy}
                   onClick={() => {
                     task.setError('');

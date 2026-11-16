@@ -161,6 +161,17 @@ h2 {
 .danger {
   color: var(--danger);
 }
+/* A destructive action outside its confirmation dialog: red text and outline,
+   no fill, so it never outweighs the everyday actions beside it. */
+.secondary.danger {
+  border-color: var(--danger);
+}
+@media (hover: hover) {
+  .secondary.danger:hover {
+    background: var(--error-bg);
+    border-color: var(--danger);
+  }
+}
 .primary.destructive {
   background: var(--danger);
   border-color: var(--danger);
