@@ -28,6 +28,7 @@ import {
   type CategoryChoice,
 } from './categories';
 import { useGridWindow } from './gridWindow';
+import { rememberTheme, savedTheme } from './theme';
 import { neighbours, PreviewCache } from './previews';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
@@ -282,7 +283,8 @@ export function Gallery({
   const [sortLoaded, setSortLoaded] = useState(false);
   const [sortLoadError, setSortLoadError] = useState('');
   const sortTask = useTask();
-  const [theme, setTheme] = useState<Theme>('system');
+  // Starts from the cookie, so the page keeps its theme while the saved one loads.
+  const [theme, setTheme] = useState<Theme>(savedTheme);
   const themeTask = useTask();
   useEffect(() => {
     const controller = new AbortController();
@@ -301,12 +303,9 @@ export function Gallery({
       });
     return () => controller.abort();
   }, [user.id]);
-  // The theme lives on <html> so the tokens switch everywhere, dialogs included.
-  // It stays after the gallery locks, until the page reloads.
-  useEffect(() => {
-    if (theme === 'system') delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = theme;
-  }, [theme]);
+  // The theme lives on <html> so the tokens switch everywhere, dialogs included,
+  // and in a cookie so the next load and the sign-in screens start with it.
+  useEffect(() => rememberTheme(theme), [theme]);
   const chooseTheme = (next: Theme) =>
     void themeTask.run(async (signal) => {
       const previous = theme;
