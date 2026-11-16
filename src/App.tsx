@@ -38,7 +38,10 @@ export function Icon({
     | 'sort'
     | 'more'
     | 'edit'
-    | 'trash';
+    | 'trash'
+    | 'sun'
+    | 'moon'
+    | 'contrast';
   size?: number;
 }) {
   const paths = {
@@ -75,6 +78,19 @@ export function Icon({
     ),
     edit: <path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4" />,
     trash: <path d="M4 7h16M10 11v6m4-6v6M6 7l1 13h10l1-13M9 7V4h6v3" />,
+    sun: (
+      <>
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" />
+      </>
+    ),
+    moon: <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />,
+    contrast: (
+      <>
+        <circle cx="12" cy="12" r="8" />
+        <path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
+      </>
+    ),
     in: (
       <>
         <circle cx="11" cy="11" r="7" />

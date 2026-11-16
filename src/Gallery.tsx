@@ -14,6 +14,7 @@ import {
   type Status,
   type Preferences,
   type SortOrder,
+  type Theme,
 } from '../shared/protocol';
 import { api, fetchObject, uploadObject } from './api';
 import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
@@ -121,6 +122,10 @@ function usePreview(cache: PreviewCache, ref: ObjectRef) {
   const stale = ready || error ? undefined : cache.peek(cache.shown);
   return { url: ready?.url ?? '', stale: stale?.url ?? '', error };
 }
+// Automatic follows the device's light or dark setting.
+const themes: Theme[] = ['system', 'light', 'dark'];
+const themeNames: Record<Theme, string> = { system: 'Automatic', light: 'Light', dark: 'Dark' };
+const themeIcons = { system: 'contrast', light: 'sun', dark: 'moon' } as const;
 function Thumbnail({
   image,
   vault,
@@ -277,11 +282,15 @@ export function Gallery({
   const [sortLoaded, setSortLoaded] = useState(false);
   const [sortLoadError, setSortLoadError] = useState('');
   const sortTask = useTask();
+  const [theme, setTheme] = useState<Theme>('system');
+  const themeTask = useTask();
   useEffect(() => {
     const controller = new AbortController();
     void api<Preferences>('/preferences', 'GET', undefined, controller.signal)
       .then((preferences) => {
-        if (!controller.signal.aborted) setSortOrder(preferences.sortOrder);
+        if (controller.signal.aborted) return;
+        setSortOrder(preferences.sortOrder);
+        setTheme(preferences.theme);
       })
       .catch((error) => {
         if (!controller.signal.aborted)
@@ -292,6 +301,23 @@ export function Gallery({
       });
     return () => controller.abort();
   }, [user.id]);
+  // The theme lives on <html> so the tokens switch everywhere, dialogs included.
+  // It stays after the gallery locks, until the page reloads.
+  useEffect(() => {
+    if (theme === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+  }, [theme]);
+  const chooseTheme = (next: Theme) =>
+    void themeTask.run(async (signal) => {
+      const previous = theme;
+      setTheme(next);
+      try {
+        await api<Preferences>('/preferences', 'PUT', { theme: next }, signal);
+      } catch (error) {
+        if (!signal.aborted) setTheme(previous);
+        throw new Error(`Could not save the appearance. ${message(error)}`);
+      }
+    });
   const [pendingDeletions, setPendingDeletions] = useState(0);
   useEffect(() => {
     if (!admin) return;
@@ -601,6 +627,14 @@ export function Gallery({
                 <Icon name="devices" />
               </button>
             )}
+            <button
+              className="icon-button"
+              aria-label={`Appearance: ${themeNames[theme]}. Change appearance`}
+              disabled={themeTask.busy}
+              onClick={() => chooseTheme(themes[(themes.indexOf(theme) + 1) % themes.length])}
+            >
+              <Icon name={themeIcons[theme]} />
+            </button>
             <button className="icon-button" aria-label="Lock collection" onClick={onLock}>
               <Icon name="lock" />
             </button>
@@ -646,6 +680,20 @@ export function Gallery({
           )}
         </nav>
         <div className="sidebar-bottom">
+          <div className="theme-switch" role="group" aria-label="Appearance">
+            {themes.map((option) => (
+              <button
+                key={option}
+                aria-pressed={theme === option}
+                aria-label={themeNames[option]}
+                title={themeNames[option]}
+                disabled={themeTask.busy}
+                onClick={() => chooseTheme(option)}
+              >
+                <Icon name={themeIcons[option]} size={18} />
+              </button>
+            ))}
+          </div>
           <p className="device-label">
             {user.label}
             <span>{admin ? 'Upload & manage' : 'Viewing access'}</span>
@@ -830,7 +878,7 @@ export function Gallery({
           )}
         </header>
         {!selecting && <ErrorNotice error={task.error} />}
-        <ErrorNotice error={sortLoadError || sortTask.error} />
+        <ErrorNotice error={sortLoadError || sortTask.error || themeTask.error} />
         {pendingDeletions > 0 && (
           <p role="alert" className="notice-strip">
             Removed from the gallery, but {pendingDeletions} encrypted files still need deletion.

@@ -59,9 +59,12 @@
 }
 
 /* Lamp off. The room goes darker than the table so the table still reads as
-   lit, and mounts stay darker than any photo. */
+   lit, and mounts stay darker than any photo. The dark palette applies when
+   the device is dark and this device hasn't chosen Light, or when it chose
+   Dark. CSS can't join a media query and a plain selector in one rule, so the
+   block appears twice; keep both copies the same. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --room: #171b20;
     --table: #232a31;
     --table-grid: #2a3139;
@@ -87,4 +90,36 @@
     --shadow-sheet: 0 -10px 40px rgb(0 0 0 / 0.5);
     --photo-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
   }
+}
+:root[data-theme='dark'] {
+  --room: #171b20;
+  --table: #232a31;
+  --table-grid: #2a3139;
+  --table-edge: #343d47;
+  --table-glow: 0 0 70px rgb(126 162 255 / 0.12);
+  --surface: #232a31;
+  --mount: #323a43;
+  --mount-edge: #46505b;
+  --line: #343d47;
+  --line-strong: #46505b;
+  --ink: #e6ebf0;
+  --ink-soft: #c9d1d9;
+  --muted: #a9b4bf;
+  --mount-number: #a9b4bf;
+  --on-ink: #171b20;
+  --select: #7ea2ff;
+  --select-soft: #33456f;
+  --danger: #ff8a80;
+  --danger-wash: #3a2224;
+  --scrim: rgb(0 0 0 / 0.55);
+  --shadow-mount: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-float: 0 10px 30px rgb(0 0 0 / 0.45);
+  --shadow-sheet: 0 -10px 40px rgb(0 0 0 / 0.5);
+  --photo-shadow: drop-shadow(0 1px 2px rgb(0 0 0 / 0.6));
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
 }
