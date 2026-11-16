@@ -482,17 +482,22 @@ input[type='checkbox'] {
   flex-direction: column;
   gap: 4px;
 }
-/* Automatic, Light, Dark: the chosen one sits raised like a slide on the table. */
-.theme-switch {
+/* Segmented switches (appearance, thumbnail size): the chosen option sits
+   raised like a slide on the table. */
+.theme-switch,
+.size-switch {
   display: flex;
   gap: 2px;
-  margin: 0 4px 12px;
   padding: 3px;
   border-radius: var(--radius-pill);
   background: var(--table-grid);
   box-shadow: inset 0 0 0 1px var(--line);
 }
-.theme-switch button {
+.theme-switch {
+  margin: 0 4px 12px;
+}
+.theme-switch button,
+.size-switch button {
   flex: 1;
   padding: 0;
   border: 0;
@@ -500,7 +505,11 @@ input[type='checkbox'] {
   background: transparent;
   color: var(--muted);
 }
-.theme-switch button[aria-pressed='true'] {
+.size-switch button {
+  width: 40px;
+}
+.theme-switch button[aria-pressed='true'],
+.size-switch button[aria-pressed='true'] {
   background: var(--surface);
   color: var(--ink);
   box-shadow:
@@ -508,7 +517,8 @@ input[type='checkbox'] {
     0 0 0 1px var(--line);
 }
 @media (hover: hover) {
-  .theme-switch button[aria-pressed='false']:not(:disabled):hover {
+  .theme-switch button[aria-pressed='false']:not(:disabled):hover,
+  .size-switch button[aria-pressed='false']:not(:disabled):hover {
     color: var(--ink);
     background: transparent;
   }
@@ -539,7 +549,8 @@ input[type='checkbox'] {
   margin-bottom: 18px;
 }
 .collection-title {
-  flex: 1;
+  flex: 1 0 auto;
+  max-width: 100%;
   min-width: 0;
   display: flex;
   align-items: baseline;
@@ -551,13 +562,24 @@ input[type='checkbox'] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The controls wrap together onto their own row when they don't fit beside
+   the title, rather than squeezing it. */
+.collection-tools {
+  flex: 1 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
 .collection-count {
   margin: 0;
   font-size: var(--text-small);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
-.search-toggle {
+.search-toggle,
+.size-cycle {
   display: none;
 }
 .search-field {
@@ -742,6 +764,22 @@ input[type='checkbox'] {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 18px 16px;
+}
+/* Thumbnail sizes, chosen per device. */
+.image-grid[data-size='small'] {
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 14px 12px;
+}
+.image-grid[data-size='large'] {
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px 20px;
+}
+.image-grid[data-size='small'] .image-card {
+  padding: 8px 8px 6px;
+  gap: 6px;
+}
+.image-grid[data-size='large'] .image-card {
+  padding: 16px 16px 10px;
 }
 /* A slide mount: square, white, photo letterboxed inside, label underneath. */
 .image-card {
@@ -1251,6 +1289,9 @@ dialog::backdrop {
   .collection-title {
     flex-basis: 100%;
   }
+  .collection-tools {
+    justify-content: flex-start;
+  }
   .drop-overlay {
     left: 236px;
   }
@@ -1345,7 +1386,7 @@ dialog::backdrop {
   }
   .collection-header {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
     gap: 8px;
     padding: 0 8px;
     margin-bottom: 12px;
@@ -1354,9 +1395,16 @@ dialog::backdrop {
     flex-direction: column;
     gap: 2px;
   }
-  .search-toggle {
+  .collection-tools {
+    display: contents;
+  }
+  .search-toggle,
+  .size-cycle {
     display: grid;
     place-items: center;
+  }
+  .size-switch {
+    display: none;
   }
   .search-field {
     display: none;
@@ -1404,6 +1452,15 @@ dialog::backdrop {
   .image-grid {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     gap: 14px;
+  }
+  /* Three columns, two, or one photo per row. */
+  .image-grid[data-size='small'] {
+    grid-template-columns: repeat(auto-fill, minmax(94px, 1fr));
+    gap: 10px;
+  }
+  .image-grid[data-size='large'] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
   }
   .image-card {
     padding: 11px 11px 7px;

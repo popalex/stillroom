@@ -15,6 +15,7 @@ import {
   type Preferences,
   type SortOrder,
   type Theme,
+  type GridSize,
 } from '../shared/protocol';
 import { api, fetchObject, uploadObject } from './api';
 import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
@@ -127,6 +128,13 @@ function usePreview(cache: PreviewCache, ref: ObjectRef) {
 const themes: Theme[] = ['system', 'light', 'dark'];
 const themeNames: Record<Theme, string> = { system: 'Automatic', light: 'Light', dark: 'Dark' };
 const themeIcons = { system: 'contrast', light: 'sun', dark: 'moon' } as const;
+const gridSizes: GridSize[] = ['small', 'medium', 'large'];
+const gridSizeNames: Record<GridSize, string> = {
+  small: 'Small thumbnails',
+  medium: 'Medium thumbnails',
+  large: 'Large thumbnails',
+};
+const gridSizeIcons = { small: 'size-small', medium: 'grid', large: 'size-large' } as const;
 function Thumbnail({
   image,
   vault,
@@ -286,6 +294,8 @@ export function Gallery({
   // Starts from the cookie, so the page keeps its theme while the saved one loads.
   const [theme, setTheme] = useState<Theme>(savedTheme);
   const themeTask = useTask();
+  const [gridSize, setGridSize] = useState<GridSize>('medium');
+  const sizeTask = useTask();
   useEffect(() => {
     const controller = new AbortController();
     void api<Preferences>('/preferences', 'GET', undefined, controller.signal)
@@ -293,6 +303,7 @@ export function Gallery({
         if (controller.signal.aborted) return;
         setSortOrder(preferences.sortOrder);
         setTheme(preferences.theme);
+        setGridSize(preferences.gridSize);
       })
       .catch((error) => {
         if (!controller.signal.aborted)
@@ -315,6 +326,17 @@ export function Gallery({
       } catch (error) {
         if (!signal.aborted) setTheme(previous);
         throw new Error(`Could not save the appearance. ${message(error)}`);
+      }
+    });
+  const chooseGridSize = (next: GridSize) =>
+    void sizeTask.run(async (signal) => {
+      const previous = gridSize;
+      setGridSize(next);
+      try {
+        await api<Preferences>('/preferences', 'PUT', { gridSize: next }, signal);
+      } catch (error) {
+        if (!signal.aborted) setGridSize(previous);
+        throw new Error(`Could not save the thumbnail size. ${message(error)}`);
       }
     });
   const [pendingDeletions, setPendingDeletions] = useState(0);
@@ -354,7 +376,10 @@ export function Gallery({
       .querySelector('.collection-nav .nav-item.active')
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [category]);
-  const shown = useGridWindow(grid, images.length, images);
+  // A new list or a new thumbnail size changes the rows, so either one
+  // recomputes the window before paint rather than a frame later.
+  const windowKey = useMemo(() => ({}), [images, gridSize]);
+  const shown = useGridWindow(grid, images.length, windowKey);
   // Select mode: thumbnails toggle membership in `chosen` instead of opening the
   // viewer. Choices persist across category and search changes, so images from
   // several views can move together.
@@ -734,150 +759,176 @@ export function Gallery({
               {search ? ' found' : ''}
             </p>
           </div>
-          <button
-            className="icon-button round search-toggle"
-            aria-label={searchOpen || search ? 'Close search' : 'Open search'}
-            aria-expanded={searchOpen || !!search}
-            onClick={() => {
-              if (searchOpen || search) {
-                setSearch('');
-                setSearchOpen(false);
-              } else setSearchOpen(true);
-            }}
-          >
-            <Icon name={searchOpen || search ? 'close' : 'search'} />
-          </button>
-          <label className={`search-field${searchOpen || search ? ' open' : ''}`}>
-            <Icon name="search" size={18} />
-            <span className="sr-only">Search photographs</span>
-            <input
-              type="search"
-              placeholder="Find a photograph"
-              autoFocus={searchOpen}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </label>
-          <label className="sort-field">
-            <span className="sr-only">Sort by</span>
-            <Icon name="sort" />
-            <select
-              value={sortOrder}
-              disabled={!sortLoaded || sortTask.busy}
-              aria-busy={sortTask.busy}
-              onChange={(event) => {
-                const next = sortOrderSchema.parse(event.currentTarget.value);
-                void sortTask.run(async (signal) => {
-                  const previous = sortOrder;
-                  setSortOrder(next);
-                  setSortLoadError('');
-                  try {
-                    await api<Preferences>('/preferences', 'PUT', { sortOrder: next }, signal);
-                  } catch (error) {
-                    if (!signal.aborted) setSortOrder(previous);
-                    throw new Error(`Could not save the sort order. ${message(error)}`);
-                  }
-                });
+          <div className="collection-tools">
+            <button
+              className="icon-button round search-toggle"
+              aria-label={searchOpen || search ? 'Close search' : 'Open search'}
+              aria-expanded={searchOpen || !!search}
+              onClick={() => {
+                if (searchOpen || search) {
+                  setSearch('');
+                  setSearchOpen(false);
+                } else setSearchOpen(true);
               }}
             >
-              <option value="date-desc">Newest first</option>
-              <option value="date-asc">Oldest first</option>
-              <option value="name-asc">Name, A to Z</option>
-              <option value="name-desc">Name, Z to A</option>
-            </select>
-          </label>
-          {admin && !selecting && (
-            // One set of actions: in the header with a mouse or trackpad, a dock at
-            // the bottom of the screen on touch screens and phones.
-            <div className="gallery-actions" role="toolbar" aria-label="Gallery actions">
-              {images.length > 0 && (
+              <Icon name={searchOpen || search ? 'close' : 'search'} />
+            </button>
+            <label className={`search-field${searchOpen || search ? ' open' : ''}`}>
+              <Icon name="search" size={18} />
+              <span className="sr-only">Search photographs</span>
+              <input
+                type="search"
+                placeholder="Find a photograph"
+                autoFocus={searchOpen}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </label>
+            <label className="sort-field">
+              <span className="sr-only">Sort by</span>
+              <Icon name="sort" />
+              <select
+                value={sortOrder}
+                disabled={!sortLoaded || sortTask.busy}
+                aria-busy={sortTask.busy}
+                onChange={(event) => {
+                  const next = sortOrderSchema.parse(event.currentTarget.value);
+                  void sortTask.run(async (signal) => {
+                    const previous = sortOrder;
+                    setSortOrder(next);
+                    setSortLoadError('');
+                    try {
+                      await api<Preferences>('/preferences', 'PUT', { sortOrder: next }, signal);
+                    } catch (error) {
+                      if (!signal.aborted) setSortOrder(previous);
+                      throw new Error(`Could not save the sort order. ${message(error)}`);
+                    }
+                  });
+                }}
+              >
+                <option value="date-desc">Newest first</option>
+                <option value="date-asc">Oldest first</option>
+                <option value="name-asc">Name, A to Z</option>
+                <option value="name-desc">Name, Z to A</option>
+              </select>
+            </label>
+            <div className="size-switch" role="group" aria-label="Thumbnail size">
+              {gridSizes.map((option) => (
                 <button
-                  className="secondary"
-                  disabled={task.busy}
-                  onClick={() => {
-                    setNotice('');
-                    setSelecting(true);
-                    closeMenu();
-                  }}
+                  key={option}
+                  aria-pressed={gridSize === option}
+                  aria-label={gridSizeNames[option]}
+                  title={gridSizeNames[option]}
+                  disabled={sizeTask.busy}
+                  onClick={() => chooseGridSize(option)}
                 >
-                  Select
+                  <Icon name={gridSizeIcons[option]} size={18} />
                 </button>
-              )}
-              {deletable && (
-                <span className="menu-anchor">
+              ))}
+            </div>
+            <button
+              className="icon-button round size-cycle"
+              aria-label={`${gridSizeNames[gridSize]}. Change thumbnail size`}
+              disabled={sizeTask.busy}
+              onClick={() =>
+                chooseGridSize(gridSizes[(gridSizes.indexOf(gridSize) + 1) % gridSizes.length])
+              }
+            >
+              <Icon name={gridSizeIcons[gridSize]} />
+            </button>
+            {admin && !selecting && (
+              // One set of actions: in the header with a mouse or trackpad, a dock at
+              // the bottom of the screen on touch screens and phones.
+              <div className="gallery-actions" role="toolbar" aria-label="Gallery actions">
+                {images.length > 0 && (
                   <button
-                    className="icon-button round"
-                    aria-label={`More actions for ${title}`}
-                    aria-haspopup="menu"
-                    aria-expanded={menuOpen}
+                    className="secondary"
                     disabled={task.busy}
-                    onClick={() => setMenuOpen(!menuOpen)}
+                    onClick={() => {
+                      setNotice('');
+                      setSelecting(true);
+                      closeMenu();
+                    }}
                   >
-                    <Icon name="more" />
+                    Select
                   </button>
-                  {menuOpen && (
-                    <>
-                      <span className="menu-backdrop" onClick={closeMenu} />
-                      <span
-                        className="menu"
-                        role="menu"
-                        aria-label={title}
-                        onKeyDown={(e) => e.key === 'Escape' && closeMenu()}
-                      >
-                        <span className="menu-title">
-                          {title}, {plural(images.length)}
-                        </span>
-                        {catalog.categories.includes(category) && (
+                )}
+                {deletable && (
+                  <span className="menu-anchor">
+                    <button
+                      className="icon-button round"
+                      aria-label={`More actions for ${title}`}
+                      aria-haspopup="menu"
+                      aria-expanded={menuOpen}
+                      disabled={task.busy}
+                      onClick={() => setMenuOpen(!menuOpen)}
+                    >
+                      <Icon name="more" />
+                    </button>
+                    {menuOpen && (
+                      <>
+                        <span className="menu-backdrop" onClick={closeMenu} />
+                        <span
+                          className="menu"
+                          role="menu"
+                          aria-label={title}
+                          onKeyDown={(e) => e.key === 'Escape' && closeMenu()}
+                        >
+                          <span className="menu-title">
+                            {title}, {plural(images.length)}
+                          </span>
+                          {catalog.categories.includes(category) && (
+                            <button
+                              role="menuitem"
+                              autoFocus
+                              onClick={() => {
+                                closeMenu();
+                                task.setError('');
+                                setRenaming(category);
+                              }}
+                            >
+                              <Icon name="edit" />
+                              Rename
+                            </button>
+                          )}
                           <button
                             role="menuitem"
-                            autoFocus
+                            className="danger"
+                            autoFocus={!catalog.categories.includes(category)}
                             onClick={() => {
                               closeMenu();
                               task.setError('');
-                              setRenaming(category);
+                              setDeletingCategory(category);
                             }}
                           >
-                            <Icon name="edit" />
-                            Rename
+                            <Icon name="trash" />
+                            {category === 'uncategorized'
+                              ? 'Delete uncategorized'
+                              : 'Delete category'}
                           </button>
-                        )}
-                        <button
-                          role="menuitem"
-                          className="danger"
-                          autoFocus={!catalog.categories.includes(category)}
-                          onClick={() => {
-                            closeMenu();
-                            task.setError('');
-                            setDeletingCategory(category);
-                          }}
-                        >
-                          <Icon name="trash" />
-                          {category === 'uncategorized'
-                            ? 'Delete uncategorized'
-                            : 'Delete category'}
-                        </button>
-                        <button className="menu-cancel" onClick={closeMenu}>
-                          Cancel
-                        </button>
-                      </span>
-                    </>
-                  )}
-                </span>
-              )}
-              <button
-                className="primary"
-                aria-label="Upload images"
-                disabled={task.busy}
-                onClick={() => fileInput.current?.click()}
-              >
-                <Icon name="plus" size={18} />
-                Upload
-              </button>
-            </div>
-          )}
+                          <button className="menu-cancel" onClick={closeMenu}>
+                            Cancel
+                          </button>
+                        </span>
+                      </>
+                    )}
+                  </span>
+                )}
+                <button
+                  className="primary"
+                  aria-label="Upload images"
+                  disabled={task.busy}
+                  onClick={() => fileInput.current?.click()}
+                >
+                  <Icon name="plus" size={18} />
+                  Upload
+                </button>
+              </div>
+            )}
+          </div>
         </header>
         {!selecting && <ErrorNotice error={task.error} />}
-        <ErrorNotice error={sortLoadError || sortTask.error || themeTask.error} />
+        <ErrorNotice error={sortLoadError || sortTask.error || themeTask.error || sizeTask.error} />
         {pendingDeletions > 0 && (
           <p role="alert" className="notice-strip">
             Removed from the gallery, but {pendingDeletions} encrypted files still need deletion.
@@ -912,6 +963,7 @@ export function Gallery({
             <div
               ref={grid}
               className={`image-grid${selecting ? ' selecting' : ''}`}
+              data-size={gridSize}
               style={{ paddingTop: shown.before, paddingBottom: shown.after }}
             >
               {images.slice(shown.start, shown.end).map((image, offset) => (
