@@ -282,6 +282,57 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(page.getByRole('button', { name: /^Private walks/ })).toHaveCount(0);
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
 
+  // Select mode moves several images in one catalog write. A shift-click picks a
+  // range in grid order and a second click on a picked image drops it.
+  let catalogWrites = 0;
+  page.on('request', (req) => {
+    if (req.method() === 'PUT' && req.url().endsWith('/api/catalog')) catalogWrites++;
+  });
+  const bar = page.getByRole('form', { name: 'Move selected images' });
+  const pickImage = (name: string) =>
+    page.getByRole('button', { name: `Select ${name}`, exact: true });
+  await page.getByRole('button', { name: 'Select', exact: true }).click();
+  await pickImage('alpha.png').click();
+  await pickImage('photo10.png').click({ modifiers: ['Shift'] });
+  await expect(bar.getByRole('status')).toHaveText('3 selected');
+  await pickImage('photo2.png').click();
+  await expect(bar.getByRole('status')).toHaveText('2 selected');
+  await expect(pickImage('photo2.png')).toHaveAttribute('aria-pressed', 'false');
+  await expect(pickImage('photo10.png')).toHaveAttribute('aria-pressed', 'true');
+  await bar.getByRole('button', { name: 'New category', exact: true }).click();
+  await bar.getByLabel('New category name', { exact: true }).fill(' Trips ');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/bulk-move-mobile.png' });
+  await bar.getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(bar.getByRole('status')).toHaveText('Moved 2 images to Trips.');
+  expect(catalogWrites).toBe(1);
+  await expect(page.getByRole('button', { name: /^Trips/ })).toContainText('2');
+  await expect(page.locator('.image-card .image-category')).toHaveText([
+    'Trips',
+    'Uncategorized',
+    'Trips',
+  ]);
+  // Select all in the Trips view, then move back with an existing category.
+  await page.getByRole('button', { name: /^Trips/ }).click();
+  await expect(names).toHaveText(['alpha.png', 'photo10.png']);
+  await page.keyboard.press('ControlOrMeta+a');
+  await expect(bar.getByRole('status')).toHaveText('2 selected');
+  await bar.getByRole('combobox', { name: 'Move to', exact: true }).selectOption('');
+  await page.setViewportSize({ width: 1280, height: 640 });
+  await page.screenshot({ path: 'test-results/bulk-move-desktop.png' });
+  await bar.getByRole('button', { name: 'Move', exact: true }).click();
+  await expect(bar.getByRole('status')).toHaveText('Moved 2 images to Uncategorized.');
+  expect(catalogWrites).toBe(2);
+  await expect(names).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(bar).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Select', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete category', exact: true }).click();
+  await page.getByRole('button', { name: 'Permanently delete category', exact: true }).click();
+  await expect(page.getByRole('button', { name: /^Trips/ })).toHaveCount(0);
+  await page.getByRole('button', { name: /^All photographs/ }).click();
+  await expect(page.getByRole('button', { name: 'View alpha.png', exact: true })).toBeVisible();
+
   for (const [filename, width] of [
     ['alpha.png', 1280],
     ['photo2.png', 390],
