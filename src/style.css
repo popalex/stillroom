@@ -184,6 +184,14 @@ h2 {
 .brand-dot {
   color: var(--sea);
 }
+.brand-home,
+.brand-home:hover {
+  border: 0;
+  border-radius: 0;
+  background: none;
+  color: inherit;
+  justify-content: flex-start;
+}
 .gate-layout {
   min-height: 100dvh;
   display: grid;

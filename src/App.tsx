@@ -81,16 +81,27 @@ export function Icon({
     </svg>
   );
 }
-export function Brand() {
-  return (
-    <div className="brand">
+export function Brand({ home }: { home?: () => void }) {
+  const content = (
+    <>
       <span className="brand-mark">
         <Icon name="grid" />
       </span>
       <span>
         stillroom<span className="brand-dot">.</span>
       </span>
-    </div>
+    </>
+  );
+  return home ? (
+    <button
+      className="brand brand-home"
+      aria-label="stillroom, show all photographs"
+      onClick={home}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="brand">{content}</div>
   );
 }
 export function ErrorNotice({ error }: { error: string }) {
