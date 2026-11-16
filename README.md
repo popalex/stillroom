@@ -23,7 +23,7 @@ The first implementation includes passkey enrollment and login, device permissio
 
    A line under the upload strip fills as the batch runs, weighted by the bytes each step moves, and the text names the file and the phase it is in. The same strip and line report a thumbnail rebuild.
 
-   To move several images to a category, choose Select in the gallery header and tap the images. Shift-click picks a range, and Ctrl+A or Cmd+A picks everything in the current view. Picks carry across categories and searches. Choose a category, or New category, in the bar at the bottom and choose Move. The move is one catalog write, so either every image moves or none does. Press Esc or choose Done to leave select mode.
+   To move several images to a category, choose Select in the gallery header and tap the images. Shift-click picks a range, and Ctrl+A or Cmd+A picks everything in the current view. Picks carry across categories and searches. Choose a category, or New category, in the bar at the bottom and choose Move. The move is one catalog write, so either every image moves or none does. Select mode ends after the move. To leave without moving, press Esc or choose Done.
 
    Use Sort by to choose filename A to Z or Z to A, or date added newest or oldest first. Date added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
 
