@@ -418,8 +418,15 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/category-actions-mobile.png', fullPage: true });
+  // The header's delete is an outline; only the dialog's confirm is solid red.
+  const background = (name: string) =>
+    page
+      .getByRole('button', { name, exact: true })
+      .evaluate((button) => getComputedStyle(button).backgroundColor);
+  expect(await background('Delete category')).toBe('rgba(0, 0, 0, 0)');
   await page.getByRole('button', { name: 'Delete category', exact: true }).click();
   await expect(page.getByRole('dialog')).toContainText('"To delete" and all 2 images');
+  expect(await background('Permanently delete category')).toBe('rgb(166, 64, 64)');
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   await expect(names).toHaveText(['alpha.png']);
   await page.getByRole('button', { name: 'Delete category', exact: true }).click();
