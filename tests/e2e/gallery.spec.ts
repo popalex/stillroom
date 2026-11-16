@@ -256,6 +256,13 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect(names).toHaveCount(0);
   await page.getByRole('button', { name: /^All photographs/ }).click();
   await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
+  // The logo goes back to the whole collection from a category and a search.
+  await page.getByRole('button', { name: /^Private walks/ }).click();
+  await page.getByRole('searchbox', { name: 'Search photographs' }).fill('alpha');
+  await page.getByRole('button', { name: 'stillroom, show all photographs' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('All photographs');
+  await expect(page.getByRole('searchbox', { name: 'Search photographs' })).toHaveValue('');
+  await expect(names).toHaveText(['alpha.png', 'photo2.png', 'photo10.png']);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/sorting-mobile.png', fullPage: true });
   await page.reload();
