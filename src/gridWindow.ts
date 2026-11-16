@@ -87,7 +87,12 @@ export function useGridWindow(grid: RefObject<HTMLElement | null>, count: number
     update();
     addEventListener('scroll', schedule, { passive: true });
     addEventListener('resize', schedule);
-    const resized = new ResizeObserver(schedule);
+    // Resize callbacks run after layout and before paint, so recomputing here
+    // keeps a rotation or window resize from drawing one frame of the old window.
+    const resized = new ResizeObserver(() => {
+      cancelAnimationFrame(frame);
+      update();
+    });
     resized.observe(element);
     return () => {
       cancelAnimationFrame(frame);
