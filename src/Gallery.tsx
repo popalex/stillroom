@@ -558,13 +558,14 @@ export function Gallery({
             onClick={() => setCategory('all')}
           >
             <Icon name="grid" size={18} />
-            All photographs<span>{catalog.images.length}</span>
+            All photographs<span className="nav-count">{catalog.images.length}</span>
           </button>
           <button
             className={`nav-item ${category === 'uncategorized' ? 'active' : ''}`}
             onClick={() => setCategory('uncategorized')}
           >
-            Uncategorized<span>{catalog.images.filter((i) => !i.category).length}</span>
+            Uncategorized
+            <span className="nav-count">{catalog.images.filter((i) => !i.category).length}</span>
           </button>
         </div>
         <div className="sidebar-section categories">
@@ -589,7 +590,9 @@ export function Gallery({
             >
               <span className="category-dot" />
               {name}
-              <span>{catalog.images.filter((i) => i.category === name).length}</span>
+              <span className="nav-count">
+                {catalog.images.filter((i) => i.category === name).length}
+              </span>
             </button>
           ))}
           {!catalog.categories.length && (

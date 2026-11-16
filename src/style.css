@@ -369,7 +369,7 @@ h2 {
   margin: 2px 0;
   text-align: left;
 }
-.nav-item > span:last-child:not(:first-child) {
+.nav-count {
   margin-left: auto;
   color: var(--nav-muted);
   font-family: var(--utility);
@@ -383,7 +383,7 @@ h2 {
   background: var(--navy-light);
   color: var(--white);
 }
-.nav-item.active > span:last-child {
+.nav-item.active .nav-count {
   color: var(--sea);
 }
 .category-dot {
@@ -1042,7 +1042,7 @@ dialog::backdrop {
   .section-label {
     margin: 0;
   }
-  .nav-item > span:last-child:not(:first-child) {
+  .nav-count {
     margin-left: 8px;
   }
   .collection-main {
