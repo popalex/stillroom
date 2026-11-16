@@ -26,6 +26,7 @@ import {
   resolveChoice,
   type CategoryChoice,
 } from './categories';
+import { useGridWindow } from './gridWindow';
 import { neighbours, PreviewCache } from './previews';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
@@ -313,6 +314,8 @@ export function Gallery({
     [catalog, category, search, sortOrder],
   );
   const selectedIndex = images.findIndex((image) => image.id === selected);
+  const grid = useRef<HTMLDivElement>(null);
+  const shown = useGridWindow(grid, images.length, images);
   // Select mode: thumbnails toggle membership in `chosen` instead of opening the
   // viewer. Choices persist across category and search changes, so images from
   // several views can move together.
@@ -786,12 +789,16 @@ export function Gallery({
           </div>
         )}
         {images.length ? (
-          <div className={`image-grid${selecting ? ' selecting' : ''}`}>
-            {images.map((image, index) => (
+          <div
+            ref={grid}
+            className={`image-grid${selecting ? ' selecting' : ''}`}
+            style={{ paddingTop: shown.before, paddingBottom: shown.after }}
+          >
+            {images.slice(shown.start, shown.end).map((image, offset) => (
               <Thumbnail
                 key={image.id}
                 image={image}
-                index={index}
+                index={shown.start + offset}
                 vault={initial.vault}
                 open={() => setSelected(image.id)}
                 selecting={selecting}

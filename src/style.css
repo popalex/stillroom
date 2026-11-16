@@ -509,8 +509,6 @@ h2 {
   text-align: left;
   background: transparent;
   min-width: 0;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 260px;
 }
 .image-card:hover {
   background: transparent;
@@ -644,7 +642,11 @@ h2 {
   text-overflow: ellipsis;
   font-size: 12px;
 }
+/* One line each, so every grid row has the same height for the windowed grid. */
 .image-category {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 10px;
   color: var(--muted);
 }
