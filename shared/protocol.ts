@@ -57,8 +57,9 @@ export type Role = 'admin' | 'viewer';
 export const sortOrderSchema = z.enum(['date-desc', 'date-asc', 'name-asc', 'name-desc']);
 // 'system' follows the device's light or dark setting.
 export const themeSchema = z.enum(['system', 'light', 'dark']);
+export const gridSizeSchema = z.enum(['small', 'medium', 'large']);
 export const preferencesSchema = z
-  .object({ sortOrder: sortOrderSchema, theme: themeSchema })
+  .object({ sortOrder: sortOrderSchema, theme: themeSchema, gridSize: gridSizeSchema })
   .strict();
 // A save may carry either preference, so changing one never resets the other.
 export const preferenceChangeSchema = preferencesSchema
@@ -66,6 +67,7 @@ export const preferenceChangeSchema = preferencesSchema
   .refine((change) => Object.keys(change).length > 0, 'Send at least one preference.');
 export type SortOrder = z.infer<typeof sortOrderSchema>;
 export type Theme = z.infer<typeof themeSchema>;
+export type GridSize = z.infer<typeof gridSizeSchema>;
 export type Preferences = z.infer<typeof preferencesSchema>;
 export type ImageEntry = {
   id: string;

@@ -31,6 +31,7 @@ import {
   type Preferences,
   type SortOrder,
   type Theme,
+  type GridSize,
   type Role,
 } from '../shared/protocol.js';
 import { openStore } from './store.js';
@@ -462,17 +463,21 @@ export async function buildApp(config: Config) {
 
   const preferencesFor = (id: string): Preferences => {
     const row = db
-      .prepare('SELECT sort_order, theme FROM device_preferences WHERE credential_id=?')
-      .get(id) as { sort_order: SortOrder; theme: Theme } | undefined;
-    return { sortOrder: row?.sort_order ?? 'date-desc', theme: row?.theme ?? 'system' };
+      .prepare('SELECT sort_order, theme, grid_size FROM device_preferences WHERE credential_id=?')
+      .get(id) as { sort_order: SortOrder; theme: Theme; grid_size: GridSize } | undefined;
+    return {
+      sortOrder: row?.sort_order ?? 'date-desc',
+      theme: row?.theme ?? 'system',
+      gridSize: row?.grid_size ?? 'medium',
+    };
   };
   app.get('/api/preferences', async (req) => preferencesFor(req.owner!.id));
   app.put('/api/preferences', async (req) => {
     const change = preferenceChangeSchema.parse(req.body);
     const preferences = { ...preferencesFor(req.owner!.id), ...change };
     db.prepare(
-      'INSERT INTO device_preferences (credential_id,sort_order,theme) VALUES (?,?,?) ON CONFLICT(credential_id) DO UPDATE SET sort_order=excluded.sort_order, theme=excluded.theme',
-    ).run(req.owner!.id, preferences.sortOrder, preferences.theme);
+      'INSERT INTO device_preferences (credential_id,sort_order,theme,grid_size) VALUES (?,?,?,?) ON CONFLICT(credential_id) DO UPDATE SET sort_order=excluded.sort_order, theme=excluded.theme, grid_size=excluded.grid_size',
+    ).run(req.owner!.id, preferences.sortOrder, preferences.theme, preferences.gridSize);
     return preferences;
   });
   app.get('/api/vault', async () => {

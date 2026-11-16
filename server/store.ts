@@ -40,12 +40,22 @@ export function openStore(dataDir: string) {
     );
     PRAGMA user_version = 3;
   `);
-  // Version 4 adds the appearance preference. Existing rows follow the device.
-  const columns = db.prepare("SELECT name FROM pragma_table_info('device_preferences')").all();
-  if (!columns.some((column) => (column as { name: string }).name === 'theme'))
+  // Version 4 adds the appearance and thumbnail size preferences. Existing rows
+  // follow the device and keep the medium size.
+  const columns = (
+    db.prepare("SELECT name FROM pragma_table_info('device_preferences')").all() as {
+      name: string;
+    }[]
+  ).map((column) => column.name);
+  if (!columns.includes('theme'))
     db.exec(`
       ALTER TABLE device_preferences ADD COLUMN theme TEXT NOT NULL DEFAULT 'system'
         CHECK(theme IN ('system','light','dark'));
+    `);
+  if (!columns.includes('grid_size'))
+    db.exec(`
+      ALTER TABLE device_preferences ADD COLUMN grid_size TEXT NOT NULL DEFAULT 'medium'
+        CHECK(grid_size IN ('small','medium','large'));
     `);
   db.pragma('user_version = 4');
   return db;
