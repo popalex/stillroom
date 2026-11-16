@@ -266,6 +266,9 @@ export function Gallery({
   const task = useTask(),
     fileInput = useRef<HTMLInputElement>(null);
   const admin = user.role === 'admin';
+  // Dragging files in needs a mouse or trackpad, so phones and tablets without one
+  // get copy that doesn't mention dropping.
+  const finePointer = useMemo(() => matchMedia('(pointer: fine)').matches, []);
   const [sortOrder, setSortOrder] = useState<SortOrder>('date-desc');
   const [sortLoaded, setSortLoaded] = useState(false);
   const [sortLoadError, setSortLoadError] = useState('');
@@ -826,7 +829,9 @@ export function Gallery({
               {search
                 ? 'Try a different filename or category.'
                 : admin
-                  ? 'Drop photographs here, or choose files from this device.'
+                  ? finePointer
+                    ? 'Drop photographs here, or choose files from this device.'
+                    : 'Choose photographs from this device to add them here.'
                   : 'Upload photographs from your upload PC to see them here.'}
             </p>
             {admin && !search && (
