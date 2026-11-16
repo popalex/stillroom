@@ -317,9 +317,35 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
     'Uncategorized',
     'Trips',
   ]);
+  // Renaming a category moves its images with it and keeps it open. A reserved
+  // name fails, and a change of capitalisation alone is allowed.
+  await page.getByRole('button', { name: /^Trips/ }).click();
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  const rename = page.getByRole('dialog', { name: 'Rename category' });
+  const newName = rename.getByLabel('New name for "Trips"');
+  await expect(newName).toHaveValue('Trips');
+  await newName.fill('All');
+  await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
+  await expect(rename.getByRole('alert')).toContainText('Choose a different category name');
+  await newName.fill(' Holidays ');
+  await page.screenshot({ path: 'test-results/rename-category-mobile.png' });
+  await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
+  await expect(rename).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Holidays');
+  await expect(page.getByRole('button', { name: /^Holidays/ })).toContainText('2');
+  await expect(page.getByRole('button', { name: /^Trips/ })).toHaveCount(0);
+  await expect(page.locator('.image-card .image-category')).toHaveText(['Holidays', 'Holidays']);
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await rename.getByLabel('New name for "Holidays"').fill('trips');
+  await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('trips');
+  await page.getByRole('button', { name: 'Rename', exact: true }).click();
+  await rename.getByLabel('New name for "trips"').fill('Trips');
+  await rename.getByRole('button', { name: 'Rename category', exact: true }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Trips');
+  expect(catalogWrites).toBe(4);
   // Esc leaves select mode. Then select all in the Trips view and move back to
   // an existing category.
-  await page.getByRole('button', { name: /^Trips/ }).click();
   await expect(names).toHaveText(['alpha.png', 'photo10.png']);
   await page.getByRole('button', { name: 'Select', exact: true }).click();
   await expect(notice).toHaveCount(0);
@@ -334,7 +360,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await bar.getByRole('button', { name: 'Move', exact: true }).click();
   await expect(notice).toHaveText('Moved 2 images to Uncategorized.');
   await expect(bar).toHaveCount(0);
-  expect(catalogWrites).toBe(2);
+  expect(catalogWrites).toBe(5);
   await expect(names).toHaveCount(0);
   await expect(notice).toHaveCount(0, { timeout: 6000 });
   await page.getByRole('button', { name: 'Delete category', exact: true }).click();
