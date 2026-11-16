@@ -459,12 +459,13 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   const tiles = await page.evaluate((count) => {
     const out: string[] = [];
     for (let i = 0; i < count; i++) {
+      // Every fifth tile is portrait, which the grid must letterbox, not crop.
       const canvas = document.createElement('canvas');
-      canvas.width = 160;
-      canvas.height = 120;
+      canvas.width = i % 5 === 1 ? 120 : 160;
+      canvas.height = i % 5 === 1 ? 200 : 120;
       const ctx = canvas.getContext('2d')!;
       ctx.fillStyle = `hsl(${(i * 37) % 360} 40% 60%)`;
-      ctx.fillRect(0, 0, 160, 120);
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
       out.push(canvas.toDataURL('image/png').split(',')[1]);
     }
     return out;
@@ -496,9 +497,18 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
         return Math.abs(card.getBoundingClientRect().top - top) > 1;
       });
       const contentBottom = box.bottom - parseFloat(style.paddingBottom);
+      const thumbnails = cards.flatMap((card) => {
+        const img = card.querySelector('img');
+        return img?.complete && img.naturalWidth ? [{ img, well: img.parentElement! }] : [];
+      });
       return {
         rendered: cards.length,
         misplaced: misplaced.length,
+        thumbnails: thumbnails.length,
+        cropped: thumbnails.filter(
+          ({ img, well }) =>
+            img.getBoundingClientRect().height > well.getBoundingClientRect().height + 1,
+        ).length,
         covered:
           cards[0].getBoundingClientRect().top <= Math.max(0, box.top) + 1 &&
           cards.at(-1)!.getBoundingClientRect().bottom >= Math.min(innerHeight, contentBottom) - 1,
@@ -516,6 +526,8 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
         at,
       );
       await expect.poll(layout).toMatchObject({ misplaced: 0, covered: true, fullHeight: true });
+      await expect.poll(async () => (await layout()).thumbnails).toBeGreaterThan(4);
+      expect((await layout()).cropped).toBe(0);
       expect((await layout()).rendered).toBeLessThan(60);
     }
   }
