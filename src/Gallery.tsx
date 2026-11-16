@@ -18,6 +18,7 @@ import {
 import { api, fetchObject, uploadObject } from './api';
 import { decryptObject, encryptCatalog, encryptObject, type VaultKey } from './crypto/vault';
 import { importImage, renderThumbnail, THUMBNAIL_EDGE } from './images';
+import { categoryName, resolveChoice, type CategoryChoice } from './categories';
 import { neighbours, PreviewCache } from './previews';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
@@ -157,23 +158,6 @@ const formatBytes = (bytes: number) =>
     ? `${(bytes / 1024 / 1024).toFixed(1)} MiB`
     : `${Math.round(bytes / 1024)} KiB`;
 
-function categoryName(value: string, categories: string[]) {
-  const name = value.trim();
-  if (!name || name.length > 80 || ['all', 'uncategorized'].includes(name.toLowerCase()))
-    throw new Error('Choose a different category name.');
-  if (categories.includes(name)) throw new Error('That category already exists.');
-  return name;
-}
-// What a CategoryPicker holds: an existing category ('' is Uncategorized), or the
-// name typed for a new one.
-type CategoryChoice = { category: string; creating: boolean; newName: string };
-// The category to assign, plus the validated name to add first when the choice
-// is a new category. Throws if that name is unusable.
-function resolveChoice(choice: CategoryChoice, categories: string[]) {
-  if (!choice.creating) return { category: choice.category, added: undefined };
-  const added = categoryName(choice.newName, categories);
-  return { category: added, added };
-}
 function CategoryPicker({
   categories,
   choice,
