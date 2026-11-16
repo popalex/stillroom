@@ -666,7 +666,7 @@ export function Gallery({
             >
               <Icon name="lock" />
             </button>
-            {admin && (selecting || catalog.images.length > 0) && (
+            {admin && (selecting || images.length > 0) && (
               <button
                 className="secondary"
                 disabled={task.busy}
