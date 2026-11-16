@@ -23,11 +23,13 @@ The first implementation includes passkey enrollment and login, device permissio
 
    A line under the upload strip fills as the batch runs, weighted by the bytes each step moves, and the text names the file and the phase it is in. The same strip and line report a thumbnail rebuild.
 
-   To rename a category, open it and choose Rename. Its images keep the category under the new name.
+   To rename a category, open it, choose the ⋯ button, then Rename. Its images keep the category under the new name.
 
-   To move several images to a category, choose Select in the gallery header and tap the images. Shift-click picks a range, and Ctrl+A or Cmd+A picks everything in the current view. Picks carry across categories and searches. Choose a category, or New category, in the bar at the bottom and choose Move. The move is one catalog write, so either every image moves or none does. Select mode ends after the move. Delete in the same bar permanently deletes the picked images after a confirmation that says how many the current view hides. To leave without moving or deleting, press Esc or choose Done.
+   To move several images to a category, choose Select and tap the images. Shift-click picks a range, and Ctrl+A or Cmd+A picks everything in the current view. Picks carry across categories and searches. Choose a category, or New category, in the bar at the bottom and choose Move. The move is one catalog write, so either every image moves or none does. Select mode ends after the move. Delete in the same bar permanently deletes the picked images after a confirmation that says how many the current view hides. To leave without moving or deleting, press Esc or choose Done.
 
-   Use Sort by to choose filename A to Z or Z to A, or date added newest or oldest first. Date added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
+   Use the sort control to sort by name, A to Z or Z to A, or by when photos were added, newest or oldest first. The time added is the upload time, not the original photo capture date. Each enrolled device keeps its own preference on the server, including viewing devices. Sorting, search, categories, and preview navigation use the same order. The browser sorts decrypted metadata; filenames remain encrypted on the server.
+
+   The layout follows the screen. On a computer, categories are in the sidebar and Select, the ⋯ menu and Upload sit in the header. On a phone, categories become a row of chips under the top bar, search and sort open from the two round buttons beside the title, and Select, ⋯ and Upload sit in a dock at the bottom of the screen, where the ⋯ menu opens as a sheet. A tablet keeps the sidebar and uses the dock. The app follows the device's light or dark setting.
 
    Open thumbnails to view previews, use arrow keys or swipe to navigate, and download the original when needed. Zoom with the scroll wheel, a pinch, a double click or double tap, the `+` and `-` keys, or the toolbar buttons, and drag to move around a zoomed image. Press `0` or the percentage button to fit the image to the window again. Zooming uses the generated preview; it does not fetch a full-resolution original automatically.
 
@@ -37,11 +39,11 @@ The first implementation includes passkey enrollment and login, device permissio
 
    Each upload stores three encrypted files: the original, a 2048px preview, and a 640px thumbnail for the grid. Images uploaded before thumbnails grew to 640px still have 320px ones, and the gallery offers Rebuild thumbnails while any remain. That runs in the browser: it decrypts each preview, renders a new thumbnail, uploads it, and deletes the file it replaced. Leave the tab open until it finishes, and run it from the upload PC, since viewing devices cannot write to the collection.
 
-   Delete category removes a category and every image in it. On Uncategorized the same button reads Delete uncategorized and removes every image without a category, leaving the categories alone. Both include images hidden by the current search.
+   Delete category, in a category's ⋯ menu, removes the category and every image in it. On Uncategorized the same menu item reads Delete uncategorized and removes every image without a category, leaving the categories alone. Both include images hidden by the current search.
 
    Delete sits beside Edit details; the form also has a Permanently delete button. Confirm permanent deletion to delete the original, preview, and thumbnail from the live server.
 
-   When a category is selected, Delete category sits beside Upload images. Confirm to permanently delete the category and all its images, including images hidden by search. Other categories and uncategorized images are kept. Empty categories can also be deleted. Category renaming is not implemented yet.
+   Confirm to permanently delete the category and all its images, including images hidden by search. Other categories and uncategorized images are kept. Empty categories can also be deleted.
 
    Locking or backgrounding the page discards the gallery state and signs out. Five minutes without interaction also locks it. No plaintext images or keys are intentionally stored in browser storage. Browser memory, device screenshots, source images on the upload PC, and downloaded originals remain outside any secure-erasure guarantee.
 
