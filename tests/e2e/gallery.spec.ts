@@ -556,6 +556,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
       });
       return {
         rendered: cards.length,
+        columns,
         misplaced: misplaced.length,
         thumbnails: thumbnails.length,
         cropped: thumbnails.filter(
@@ -570,20 +571,51 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
           1,
       };
     }, many);
+  const steadyAt = async (at: number) => {
+    await page.evaluate(
+      (at) => scrollTo(0, (document.documentElement.scrollHeight - innerHeight) * at),
+      at,
+    );
+    await expect.poll(layout).toMatchObject({ misplaced: 0, covered: true, fullHeight: true });
+    await expect.poll(async () => (await layout()).thumbnails).toBeGreaterThan(4);
+    expect((await layout()).cropped).toBe(0);
+    expect((await layout()).rendered).toBeLessThan(many / 2);
+  };
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 800 });
     await page.evaluate(() => scrollTo(0, 0));
-    for (const at of [0, 0.3, 0.6, 1, 0.1]) {
-      await page.evaluate(
-        (at) => scrollTo(0, (document.documentElement.scrollHeight - innerHeight) * at),
-        at,
-      );
-      await expect.poll(layout).toMatchObject({ misplaced: 0, covered: true, fullHeight: true });
-      await expect.poll(async () => (await layout()).thumbnails).toBeGreaterThan(4);
-      expect((await layout()).cropped).toBe(0);
-      expect((await layout()).rendered).toBeLessThan(60);
-    }
+    for (const at of [0, 0.3, 0.6, 1, 0.1]) await steadyAt(at);
   }
+  // The thumbnail size changes the columns and the row height, and the window
+  // follows. Each device's size is saved on the server.
+  const columns = async () => (await layout()).columns;
+  const savedSize = () =>
+    page.evaluate(async () => (await (await fetch('/api/preferences')).json()).gridSize);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  const sizes = page.getByRole('group', { name: 'Thumbnail size' });
+  await expect(sizes.getByRole('button', { name: 'Medium thumbnails' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  const medium = await columns();
+  await sizes.getByRole('button', { name: 'Small thumbnails' }).click();
+  await expect.poll(columns).toBeGreaterThan(medium);
+  await expect.poll(savedSize).toBe('small');
+  for (const at of [0.5, 1]) await steadyAt(at);
+  await sizes.getByRole('button', { name: 'Large thumbnails' }).click();
+  await expect.poll(columns).toBeLessThan(medium);
+  for (const at of [0.5, 0]) await steadyAt(at);
+  await page.screenshot({ path: 'test-results/large-desktop.png', animations: 'disabled' });
+  // On a phone one round button cycles the sizes: one, three, then two columns.
+  await page.setViewportSize({ width: 390, height: 800 });
+  await expect.poll(columns).toBe(1);
+  await page.getByRole('button', { name: 'Large thumbnails. Change thumbnail size' }).click();
+  await expect.poll(columns).toBe(3);
+  await steadyAt(0.5);
+  await page.screenshot({ path: 'test-results/small-mobile.png', animations: 'disabled' });
+  await page.getByRole('button', { name: 'Small thumbnails. Change thumbnail size' }).click();
+  await expect.poll(columns).toBe(2);
+  await expect.poll(savedSize).toBe('medium');
   // Selection still spans cards that are not rendered.
   await page.evaluate(() => scrollTo(0, 0));
   await page.getByRole('button', { name: 'Select', exact: true }).click();
@@ -612,8 +644,10 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await expect.poll(room).toBe(darkRoom);
   await expect.poll(savedTheme).toBe('dark');
   await page.screenshot({ path: 'test-results/dark-desktop.png', animations: 'disabled' });
-  // The saved choice comes back after a reload, once the gallery unlocks.
+  // A cookie mirrors the choice, so the sign-in screen is already dark. The
+  // saved choice comes back from the server once the gallery unlocks.
   await page.reload();
+  await expect.poll(room).toBe(darkRoom);
   await page.getByRole('button', { name: 'Sign in with passkey' }).click();
   await page
     .getByLabel('Vault passphrase', { exact: true })
@@ -639,6 +673,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
   await page.screenshot({ path: 'test-results/dark-mobile.png', animations: 'disabled' });
   await page.getByRole('button', { name: 'Appearance: Dark. Change appearance' }).click();
   await expect.poll(savedTheme).toBe('system');
+  expect(await page.evaluate(() => document.cookie)).not.toContain('stillroom-theme');
   await page.emulateMedia({ colorScheme: 'light' });
   await expect.poll(room).toBe(lightRoom);
   expect(external).toEqual([]);
