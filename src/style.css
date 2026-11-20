@@ -815,14 +815,22 @@ input[type='checkbox'] {
 }
 /* Pinned to the well's edges so object-fit: contain letterboxes portrait
    photos instead of the well cropping them. The drop shadow follows the
-   photo's own edges, like a slide's film inside the mount. */
-.image-well img {
+   photo's own edges, like a slide's film inside the mount. A canvas holds
+   the sharper preview for large frames and covers the thumbnail once drawn. */
+.image-well img,
+.image-well canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: contain;
   filter: var(--photo-shadow);
+}
+.image-well img.covered {
+  visibility: hidden;
+}
+.image-well canvas[hidden] {
+  display: none;
 }
 .image-placeholder {
   position: absolute;

@@ -31,6 +31,7 @@ import {
 import { useGridWindow } from './gridWindow';
 import { rememberTheme, savedTheme } from './theme';
 import { neighbours, PreviewCache } from './previews';
+import { useSharpImage } from './sharpen';
 import { sortImages } from './sorting';
 import { Brand, Dialog, ErrorNotice, Icon, message, useTask, type OpenVault } from './App';
 
@@ -162,6 +163,9 @@ function Thumbnail({
     return () => observer.disconnect();
   }, []);
   const { url, error } = useImage(image.thumbnail, vault, near);
+  const well = useRef<HTMLSpanElement>(null),
+    canvas = useRef<HTMLCanvasElement>(null);
+  const sharp = useSharpImage(image, vault, Boolean(url), well, canvas);
   return (
     <button
       ref={ref}
@@ -175,9 +179,12 @@ function Thumbnail({
           {checked && <Icon name="check" size={16} />}
         </span>
       )}
-      <span className="image-well">
+      <span className="image-well" ref={well}>
         {url ? (
-          <img src={url} alt="" />
+          <>
+            <img src={url} alt="" className={sharp.drawn ? 'covered' : undefined} />
+            {sharp.edge > 0 && <canvas ref={canvas} hidden={!sharp.drawn} />}
+          </>
         ) : (
           <span className="image-placeholder">
             {error ? 'Could not load preview' : <Icon name="grid" size={24} />}
