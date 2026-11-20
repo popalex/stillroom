@@ -3,9 +3,10 @@ import { encryptObject, type VaultKey } from './crypto/vault';
 import { uploadObject } from './api';
 
 const MAX_PIXELS = 40_000_000;
-// Grid cards are at most ~320 CSS px wide, so 640 keeps them sharp on a 2x screen.
+// Most grid cards are at most ~320 CSS px wide, so 640 keeps them sharp on a 2x
+// screen. Larger frames draw the preview instead (see sharpen.ts).
 export const THUMBNAIL_EDGE = 640;
-const PREVIEW_EDGE = 2048;
+export const PREVIEW_EDGE = 2048;
 function dimensions(bytes: Uint8Array, mime: string): [number, number] {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   if (
