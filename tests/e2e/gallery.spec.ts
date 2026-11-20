@@ -112,6 +112,7 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
 
   const phone = await browser.newContext({
     viewport: { width: 390, height: 844 },
+    deviceScaleFactor: 3,
     isMobile: true,
     hasTouch: true,
   });
@@ -138,6 +139,19 @@ test('browser upload, encrypted storage, second-device viewing, and recovery', a
     fullPage: true,
     animations: 'disabled',
   });
+  // Two photos per row fit the 640px thumbnail. One per row on a 3x screen
+  // needs more, so the card draws the 800px preview over the thumbnail.
+  const card = viewer.getByRole('button', { name: 'View private-garden.png' });
+  await expect(card.locator('img')).toBeVisible();
+  await expect(card.locator('canvas')).toHaveCount(0);
+  await viewer.getByRole('button', { name: 'Medium thumbnails. Change thumbnail size' }).click();
+  await expect(card.locator('canvas')).toBeVisible();
+  await expect(card.locator('canvas')).toHaveJSProperty('width', 800);
+  await expect(card.locator('img')).toBeHidden();
+  await viewer.screenshot({ path: 'test-results/large-mobile-sharp.png', animations: 'disabled' });
+  await viewer.getByRole('button', { name: 'Large thumbnails. Change thumbnail size' }).click();
+  await expect(card.locator('canvas')).toHaveCount(0);
+  await expect(card.locator('img')).toBeVisible();
   await viewer.getByRole('button', { name: 'View private-garden.png' }).click();
   await expect(viewer.getByRole('dialog').locator('img')).toBeVisible();
   const download = viewer.waitForEvent('download');
